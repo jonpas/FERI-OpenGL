@@ -22,7 +22,7 @@ OpenGL introduction application at Computer Graphics (slo. Računalniška Grafik
 - Object
   - Translation: <kbd>H</kbd> (Left) / <kbd>J</kbd> (Forward) / <kbd>K</kbd> (Backward) / <kbd>L</kbd> (Right) / <kbd>U</kbd> (Up) / <kbd>N</kbd> (Down)
   - Rotation: <kbd>Y</kbd> (on Y) / <kbd>X</kbd> (on X) / <kbd>C</kbd> (on Z)
-    - Negative Rotation: <kbd>Ctrl</kbd> + <kbd>Rotation Key<kbd/>
+    - Negative Rotation: <kbd>Ctrl</kbd> + <kbd>Rotation Key</kbd>
   - Scale: <kbd>+</kbd> (Up) / <kbd>-</kbd> (Down)
 - Projection Change: <kbd>P</kbd>
 
