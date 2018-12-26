@@ -21,9 +21,9 @@ OpenGL introduction application at Computer Graphics (slo. Računalniška Grafik
   - Rotation: <kbd>Right Mouse Button</kbd> + <kbd>Mouse Axis</kbd>
 - Object
   - Translation: <kbd>H</kbd> (Left) / <kbd>J</kbd> (Forward) / <kbd>K</kbd> (Backward) / <kbd>L</kbd> (Right) / <kbd>U</kbd> (Up) / <kbd>N</kbd> (Down)
-  - Rotation: <kbd>Y</kbd> (Rotate on Y) / <kbd>X</kbd> (Rotate on X) / <kbd>C</kbd> (Rotate on Z)
-    - Opposite Rotation: <kbd>Ctrl</kbd> + Rotation Key
-  - Scale: <kbd>+</kbd> (Scale Up) / <kbd>-</kbd> (Scale Down)
+  - Rotation: <kbd>Y</kbd> (on Y) / <kbd>X</kbd> (on X) / <kbd>C</kbd> (on Z)
+    - Negative Rotation: <kbd>Ctrl</kbd> + <kbd>Rotation Key<kbd/>
+  - Scale: <kbd>+</kbd> (Up) / <kbd>-</kbd> (Down)
 - Projection Change: <kbd>P</kbd>
 
 ### Setup
