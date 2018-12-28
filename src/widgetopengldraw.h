@@ -9,6 +9,7 @@
 #include <QOpenGLFunctions_3_3_Core>
 #include <QTime>
 #include <QMouseEvent>
+#include <QComboBox>
 
 #include <glm/glm.hpp>
 #include <glm/ext.hpp>
@@ -20,6 +21,8 @@ struct Vertex {
 };
 
 struct Object {
+    QString name;
+
     std::vector<Vertex> vertices;
     std::vector<GLuint> indices;
     GLuint vertexBufferOffset;
@@ -30,9 +33,10 @@ struct Object {
     glm::vec3 scale = glm::vec3(1);
     glm::vec3 rotation = glm::vec3(0);
 
-    Object() : vertices({}), indices({}) {}
-    Object(std::vector<Vertex> vertices_, std::vector<GLuint> indices_)
-        : vertices(vertices_), indices(indices_) {}
+    Object() : name(""), vertices({}), indices({}) {}
+    Object(QString name_) : name(name_), vertices({}), indices({}) {}
+    Object(std::vector<Vertex> vertices_, std::vector<GLuint> indices_) : name(""), vertices(vertices_), indices(indices_) {}
+    Object(QString name_, std::vector<Vertex> vertices_, std::vector<GLuint> indices_) : name(name_), vertices(vertices_), indices(indices_) {}
 
     ssize_t vertexBufferSize() const {
         return static_cast<ssize_t>(vertices.size() * sizeof(Vertex));
@@ -46,14 +50,20 @@ struct Object {
 class QOpenGLFunctions_3_3_Core;
 
 class WidgetOpenGLDraw : public QOpenGLWidget {
+    Q_OBJECT
 public:
+    QComboBox *objectSelection;
+
     WidgetOpenGLDraw(QWidget* parent);
     ~WidgetOpenGLDraw() override;
 
     void handleKeys(QSet<int> keys, Qt::KeyboardModifiers modifiers);
 
     Object makeCube(glm::vec3 baseVertex, GLuint baseIndex = 0);
-    Object makePyramid(glm::vec3 baseVertex, uint32_t rows);
+    Object makePyramid(glm::vec3 baseVertex, uint32_t rows, QString name = "");
+
+public slots:
+    void setObject(int index);
 
 protected:
     // OpenGL overrides
@@ -77,7 +87,7 @@ private:
 
     std::vector<Object> objects;
     // Object pointers (no other accessors available at this time)
-    Object *pyramid;
+    Object *selectedObject;
 
     std::mt19937 rng;
 

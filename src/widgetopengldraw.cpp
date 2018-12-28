@@ -117,6 +117,7 @@ void WidgetOpenGLDraw::initializeGL() {
     objects = {
         // Ground
         {
+            "Ground",
             {
                 {glm::vec3(-5, 0, -5), glm::vec4(0.7f, 0, 0, 1)},
                 {glm::vec3(5, 0, -5),  glm::vec4(0.7f, 0, 0, 1)},
@@ -127,8 +128,15 @@ void WidgetOpenGLDraw::initializeGL() {
         }
     };
 
-    objects.push_back(makePyramid(glm::vec3(-1, 0, -1), 3));
-    pyramid = &objects.back();
+    objects.push_back(makePyramid(glm::vec3(-1, 0, -1), 3, "Pyramid 1"));
+
+    // Connect object selection ComboBox and fill it
+    QObject::connect(objectSelection, SIGNAL(currentIndexChanged(int)), this, SLOT(setObject(int)));
+    selectedObject = &objects.front(); // First selected object same as first selected ComboBox item
+
+    for (auto &object : objects) {
+        objectSelection->addItem(object.name);
+    }
 
     // Buffer data
     // Compile full object sizes and their offsets inside the resulting buffer
@@ -263,56 +271,56 @@ void WidgetOpenGLDraw::handleKeys(QSet<int> keys, Qt::KeyboardModifiers modifier
     }
     if (keys.contains(Qt::Key_E)) {
         // Move camera in the opposite direction of up vector
-         cameraPos -= cameraUp * cameraSpeed;
+        cameraPos -= cameraUp * cameraSpeed;
     }
 
-    // Pyramid movement
+    // Selected Object movement
     if (keys.contains(Qt::Key_U)) {
         // Move up
-        pyramid->translation.y += 0.25f;
+        selectedObject->translation.y += 0.25f;
     }
     if (keys.contains(Qt::Key_N)) {
         // Move down
-        pyramid->translation.y -= 0.25f;
+        selectedObject->translation.y -= 0.25f;
     }
     if (keys.contains(Qt::Key_H)) {
         // Move right
-        pyramid->translation.x += 0.25f;
+        selectedObject->translation.x += 0.25f;
     }
     if (keys.contains(Qt::Key_L)) {
         // Move left
-        pyramid->translation.x -= 0.25f;
+        selectedObject->translation.x -= 0.25f;
     }
     if (keys.contains(Qt::Key_K)) {
         // Move forward
-        pyramid->translation.z += 0.25f;
+        selectedObject->translation.z += 0.25f;
     }
     if (keys.contains(Qt::Key_J)) {
         // Move backward
-        pyramid->translation.z -= 0.25f;
+        selectedObject->translation.z -= 0.25f;
     }
     if (keys.contains(Qt::Key_Plus)) {
         // Scale up
-        pyramid->scale *= glm::vec3(1.05f);
+        selectedObject->scale *= glm::vec3(1.05f);
     }
     if (keys.contains(Qt::Key_Minus)) {
         // Scale down
-        pyramid->scale *= glm::vec3(0.95f);
+        selectedObject->scale *= glm::vec3(0.95f);
     }
     if (keys.contains(Qt::Key_X)) {
         // Rotate on X
         int8_t dir = (modifiers.testFlag(Qt::ControlModifier)) ? -1 : 1;
-        pyramid->rotation.x += 0.1f * dir;
+        selectedObject->rotation.x += 0.1f * dir;
     }
     if (keys.contains(Qt::Key_Y)) {
         // Rotate on Y
         int8_t dir = (modifiers.testFlag(Qt::ControlModifier)) ? -1 : 1;
-        pyramid->rotation.z += 0.1f * dir;
+        selectedObject->rotation.z += 0.1f * dir;
     }
     if (keys.contains(Qt::Key_C)) {
         // Rotate on Z
         int8_t dir = (modifiers.testFlag(Qt::ControlModifier)) ? -1 : 1;
-        pyramid->rotation.y += 0.1f * dir;
+        selectedObject->rotation.y += 0.1f * dir;
     }
 
     // Misc
@@ -325,7 +333,7 @@ void WidgetOpenGLDraw::handleKeys(QSet<int> keys, Qt::KeyboardModifiers modifier
     // We are executing OpenGL on this surface (applications may have more drawing surfaces!)
     // Dialogs for opening files have their own surfaces and with that their own context!
     // http://doc.qt.io/qt-5/qopenglwidget.html#makeCurrent
-    makeCurrent();
+    //makeCurrent();
 
     update();
 }
@@ -368,6 +376,10 @@ void WidgetOpenGLDraw::updateCameraFront() {
     update();
 }
 
+void WidgetOpenGLDraw::setObject(int index) {
+    selectedObject = &objects.at(static_cast<uint32_t>(index));
+}
+
 Object WidgetOpenGLDraw::makeCube(glm::vec3 baseVertex, GLuint baseIndex) {
     std::uniform_real_distribution<float> dist(0, 1);
     glm::vec4 rngColor = glm::vec4(dist(rng), dist(rng), dist(rng), 1);
@@ -396,8 +408,8 @@ Object WidgetOpenGLDraw::makeCube(glm::vec3 baseVertex, GLuint baseIndex) {
     return cube;
 }
 
-Object WidgetOpenGLDraw::makePyramid(glm::vec3 baseVertex, uint32_t rows) {
-    Object pyramid;
+Object WidgetOpenGLDraw::makePyramid(glm::vec3 baseVertex, uint32_t rows, QString name) {
+    Object pyramid(name);
 
     float offset = 0.0f;
     for (uint32_t row = 0; row < rows; ++row) {

@@ -18,6 +18,13 @@
     <item>
      <widget class="WidgetOpenGLDraw" name="widget" native="true"/>
     </item>
+    <item>
+     <widget class="QComboBox" name="objectSelection">
+      <property name="focusPolicy">
+       <enum>Qt::NoFocus</enum>
+      </property>
+     </widget>
+    </item>
    </layout>
   </widget>
   <widget class="QStatusBar" name="statusBar"/>

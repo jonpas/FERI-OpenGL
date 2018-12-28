@@ -4,6 +4,9 @@
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWindow) {
     ui->setupUi(this);
     this->installEventFilter(this);
+
+    // Link WidgetOpenGLDraw and ComboBox (object selection)
+    ui->widget->objectSelection = ui->objectSelection;
 }
 
 MainWindow::~MainWindow() {
