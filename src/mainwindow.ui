@@ -19,11 +19,28 @@
      <widget class="WidgetOpenGLDraw" name="widget" native="true"/>
     </item>
     <item>
-     <widget class="QComboBox" name="objectSelection">
-      <property name="focusPolicy">
-       <enum>Qt::NoFocus</enum>
-      </property>
-     </widget>
+     <layout class="QHBoxLayout" name="horizontalLayout">
+      <item>
+       <widget class="QComboBox" name="objectSelection">
+        <property name="focusPolicy">
+         <enum>Qt::NoFocus</enum>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="openFileButton">
+        <property name="focusPolicy">
+         <enum>Qt::NoFocus</enum>
+        </property>
+        <property name="toolTip">
+         <string>Load models from OBJ files</string>
+        </property>
+        <property name="text">
+         <string>Load Object</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
     </item>
    </layout>
   </widget>

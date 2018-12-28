@@ -28,3 +28,21 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
         return QObject::eventFilter(obj, event);
     }
 }
+
+void MainWindow::resetOpenGLContext() {
+    // This function has to be called for working with OpenGL
+    // We are executing OpenGL on this surface (applications may have more drawing surfaces!)
+    // Dialogs for opening files have their own surfaces and with that their own context!
+    // http://doc.qt.io/qt-5/qopenglwidget.html#makeCurrent
+    ui->widget->makeCurrent();
+}
+
+void MainWindow::on_openFileButton_clicked() {
+    QStringList fileNames = QFileDialog::getOpenFileNames(this, "Load Object", "Object (*.obj)");
+
+    resetOpenGLContext();
+
+    for (auto &fileName : fileNames) {
+        ui->widget->loadObject(fileName);
+    }
+}

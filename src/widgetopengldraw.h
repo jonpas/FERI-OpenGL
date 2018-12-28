@@ -58,6 +58,7 @@ public:
     ~WidgetOpenGLDraw() override;
 
     void handleKeys(QSet<int> keys, Qt::KeyboardModifiers modifiers);
+    bool loadObject(QString fileName);
 
     Object makeCube(glm::vec3 baseVertex, GLuint baseIndex = 0);
     Object makePyramid(glm::vec3 baseVertex, uint32_t rows, QString name = "");
@@ -70,6 +71,9 @@ protected:
     void paintGL() override;
     void initializeGL() override;
     void resizeGL(int w, int h) override;
+
+    void updateBuffers();
+    void generateObjectVAO(Object *object);
 
 private:
     QOpenGLFunctions_3_3_Core gl;

@@ -2,6 +2,7 @@
 
 #include <QMainWindow>
 #include <QKeyEvent>
+#include <QFileDialog>
 
 namespace Ui {
     class MainWindow;
@@ -20,4 +21,9 @@ protected:
 private:
     Ui::MainWindow *ui;
     QSet<int> pressedKeys;
+
+    void resetOpenGLContext();
+
+private slots:
+    void on_openFileButton_clicked();
 };
