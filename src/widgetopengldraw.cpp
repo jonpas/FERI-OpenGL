@@ -14,11 +14,10 @@ WidgetOpenGLDraw::~WidgetOpenGLDraw() {
     gl.glDeleteShader(vertexShaderID);
     gl.glDeleteShader(fragmentShaderID);
 
-    gl.glDeleteBuffers(1, &vertexBufferID);
-    gl.glDeleteBuffers(1, &indexBufferID);
-
     for (const auto &object : objects) {
-        gl.glDeleteVertexArrays(1, &object.vertexArrayObject);
+        gl.glDeleteVertexArrays(1, &object.VAO);
+        gl.glDeleteBuffers(1, &object.VBO);
+        gl.glDeleteBuffers(1, &object.IBO);
     }
 }
 
@@ -29,7 +28,7 @@ void WidgetOpenGLDraw::printProgramInfoLog(GLuint obj) {
         std::unique_ptr<char[]> infoLog(new char[infologLength]);
         int charsWritten = 0;
         gl.glGetProgramInfoLog(obj, infologLength, &charsWritten, infoLog.get());
-        std::cerr << infoLog.get() << "\n";
+        std::cerr << infoLog.get() << std::endl;
     }
 }
 
@@ -40,7 +39,7 @@ void WidgetOpenGLDraw::printShaderInfoLog(GLuint obj) {
         std::unique_ptr<char[]> infoLog(new char[infologLength]);
         int charsWritten = 0;
         gl.glGetShaderInfoLog(obj, infologLength, &charsWritten, infoLog.get());
-        std::cerr << infoLog.get() << "\n";
+        std::cerr << infoLog.get() << std::endl;
     }
 }
 
@@ -48,6 +47,8 @@ const GLchar* WidgetOpenGLDraw::vertexShaderSource = R"glsl(
     #version 330 core
     layout(location=0) in vec3 position;
     layout(location=1) in vec4 color;
+    layout(location=2) in vec2 uv;
+    layout(location=3) in vec3 normal;
     uniform mat4 PVM;
     out vec4 Color;
     void main() {
@@ -115,33 +116,27 @@ void WidgetOpenGLDraw::initializeGL() {
 
     // Define data
     objects = {
-        // Ground
         {
             "Ground",
             {
-                {glm::vec3(-5, 0, -5), glm::vec4(0.7f, 0, 0, 1)},
-                {glm::vec3(5, 0, -5),  glm::vec4(0.7f, 0, 0, 1)},
-                {glm::vec3(5, 0, 5),   glm::vec4(0.7f, 0, 0, 1)},
-                {glm::vec3(-5, 0, 5),  glm::vec4(0.7f, 0, 0, 1)}
+                {glm::vec3(-5, 0, -5), glm::vec4(0.7f, 0, 0, 1), glm::vec2(0.0f), glm::vec3(0.0f)},
+                {glm::vec3(5, 0, -5),  glm::vec4(0.7f, 0, 0, 1), glm::vec2(0.0f), glm::vec3(0.0f)},
+                {glm::vec3(5, 0, 5),   glm::vec4(0.7f, 0, 0, 1), glm::vec2(0.0f), glm::vec3(0.0f)},
+                {glm::vec3(-5, 0, 5),  glm::vec4(0.7f, 0, 0, 1), glm::vec2(0.0f), glm::vec3(0.0f)}
             },
-            {0, 1, 2, 2, 3, 0}
+            {0, 1, 2, 2, 3, 0}, {}, {}
         }
     };
 
     objects.push_back(makePyramid(glm::vec3(-1, 0, -1), 3, "Pyramid 1"));
 
     // Connect object selection ComboBox and fill it
-    QObject::connect(objectSelection, SIGNAL(currentIndexChanged(int)), this, SLOT(setObject(int)));
+    QObject::connect(objectSelection, SIGNAL(currentIndexChanged(int)), this, SLOT(selectObject(int)));
     selectedObject = &objects.front(); // First selected object same as first selected ComboBox item
 
-    // Generate buffers
-    gl.glGenBuffers(1, &vertexBufferID); // Create Vertex Buffer
-    gl.glGenBuffers(1, &indexBufferID); // Create Index (Element) Buffer
-
-    // Buffer data
-    updateBuffers();
+    // Buffer data to GPU
     for (auto &object : objects) {
-        generateObjectVAO(&object);
+        generateObjectBuffers(object);
     }
 
     // Set background color
@@ -153,58 +148,40 @@ void WidgetOpenGLDraw::initializeGL() {
     }
 }
 
-void WidgetOpenGLDraw::updateBuffers() {
-    // Buffer data to GPU
-    // Compile full object sizes and their offsets inside the resulting buffer
-    size_t verticesSize = 0;
-    size_t indicesSize = 0;
-    GLuint vertexOffset = 0;
-    GLuint indexOffset = 0;
-    for (auto &object : objects) {
-        object.vertexBufferOffset = vertexOffset;
-        verticesSize += object.vertices.size();
-        vertexOffset += object.vertexBufferSize();
+void WidgetOpenGLDraw::generateObjectBuffers(Object &object) {
+    // Create Vertex Array Object, carrying properties related with buffer (eg. state of glEnableVertexAttribArray etc.)
+    gl.glGenVertexArrays(1, &object.VAO);
+    gl.glBindVertexArray(object.VAO);
 
-        object.indexBufferOffset = indexOffset;
-        indicesSize += object.indices.size();
-        indexOffset += object.indexBufferSize();
-    }
+    // Create and bind Vertex Buffer and load vertices into it
+    gl.glGenBuffers(1, &object.VBO);
+    gl.glBindBuffer(GL_ARRAY_BUFFER, object.VBO);
+    gl.glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(object.vertices.size() * sizeof(Vertex)), &object.vertices.front(), GL_STATIC_DRAW);
 
-    // Bind Vertex Buffer and load vertices into it
-    gl.glBindBuffer(GL_ARRAY_BUFFER, vertexBufferID);
-    gl.glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(verticesSize * sizeof(Vertex)), nullptr, GL_STATIC_DRAW);
+    // Create and bind Index Buffer and load vertex indices into it
+    gl.glGenBuffers(1, &object.IBO);
+    gl.glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, object.IBO);
+    gl.glBufferData(GL_ELEMENT_ARRAY_BUFFER, static_cast<GLsizeiptr>(object.indices.size() * sizeof(GLuint)), &object.indices.front(), GL_STATIC_DRAW);
 
-    for (const auto &object : objects) {
-        gl.glBufferSubData(GL_ARRAY_BUFFER, object.vertexBufferOffset, object.vertexBufferSize(), &object.vertices.front());
-    }
-
-    // Bind Index (Element) Buffer and load vertex indices into it
-    gl.glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBufferID);
-    gl.glBufferData(GL_ELEMENT_ARRAY_BUFFER, static_cast<GLsizeiptr>(indicesSize * sizeof(GLuint)), nullptr, GL_STATIC_DRAW);
-
-    for (const auto &object : objects) {
-        gl.glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, object.indexBufferOffset, object.indexBufferSize(), &object.indices.front());
-    }
-}
-
-void WidgetOpenGLDraw::generateObjectVAO(Object *object) {
-    // Create Vertex Array Object for given object, carrying properties related with buffer (eg. state of glEnableVertexAttribArray etc.)
-    gl.glGenVertexArrays(1, &object->vertexArrayObject);
-    gl.glBindVertexArray(object->vertexArrayObject);
-
-    gl.glBindBuffer(GL_ARRAY_BUFFER, vertexBufferID);
-    gl.glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBufferID);
-
-    // Specify layout of vertex data
+    // Setup vertex attributes (specify layout of vertex data)
     gl.glEnableVertexAttribArray(0);  // We use: layout(location=0) and vec3 position;
     gl.glEnableVertexAttribArray(1);  // We use: layout(location=1) and vec4 color;
-    gl.glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex),
-                             reinterpret_cast<void *>(object->vertexBufferOffset + offsetof(Vertex, position)));
-    gl.glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex),
-                             reinterpret_cast<void *>(object->vertexBufferOffset + offsetof(Vertex, color)));
+    gl.glEnableVertexAttribArray(2);  // We use: layout(location=2) and vec2 uv;
+    gl.glEnableVertexAttribArray(3);  // We use: layout(location=3) and vec3 normal;
+    gl.glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<void *>(offsetof(Vertex, position)));
+    gl.glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<void *>(offsetof(Vertex, color)));
+    gl.glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<void *>(offsetof(Vertex, uv)));
+    gl.glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<void *>(offsetof(Vertex, normal)));
+
+#ifdef QT_DEBUG
+    // Unbind to avoid accidental modification
+    gl.glBindVertexArray(0); // VAO must be first!
+    gl.glBindBuffer(GL_ARRAY_BUFFER, 0);
+    gl.glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+#endif
 
     // Add to object selection dropdown
-    objectSelection->addItem(object->name);
+    objectSelection->addItem(object.name);
 }
 
 void WidgetOpenGLDraw::resizeGL(int w, int h) {
@@ -227,7 +204,7 @@ void WidgetOpenGLDraw::paintGL() {
 
     // Object
     for (const auto &object : objects) {
-        gl.glBindVertexArray(object.vertexArrayObject);
+        gl.glBindVertexArray(object.VAO);
 
         // Model matrix (object movement)
         glm::mat4 M = glm::mat4(1);
@@ -244,8 +221,12 @@ void WidgetOpenGLDraw::paintGL() {
         gl.glUniformMatrix4fv(gl.glGetUniformLocation(programShaderID, "PVM"), 1, GL_FALSE, glm::value_ptr(PVM));
 
         // Draw
-        gl.glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(object.indices.size()), GL_UNSIGNED_INT,
-                          reinterpret_cast<void *>(object.indexBufferOffset));
+        gl.glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(object.indices.size()), GL_UNSIGNED_INT, nullptr);
+
+#ifdef QT_DEBUG
+        // Unbind to avoid accidental modification
+        gl.glBindVertexArray(0);
+#endif
     }
 
     const unsigned int err = gl.glGetError();
@@ -379,23 +360,103 @@ void WidgetOpenGLDraw::updateCameraFront() {
     update(); // Redraw scene
 }
 
-void WidgetOpenGLDraw::setObject(int index) {
+void WidgetOpenGLDraw::selectObject(int index) {
     selectedObject = &objects.at(static_cast<uint32_t>(index));
 }
 
-bool WidgetOpenGLDraw::loadObject(QString fileName) {
-    // TODO Load from actual file
-    objects.push_back(makePyramid(glm::vec3(-1, 3, -1), 3, fileName));
+void WidgetOpenGLDraw::loadModelsFromFile(QStringList &paths) {
+    for (auto &path : paths) {
+        QFileInfo fileInfo(path);
+        Object object(fileInfo.fileName());
 
-    // Update Vertex and Index (Element) Buffers and generate Vertex Array Object for new object
-    updateBuffers();
-    generateObjectVAO(&objects.back());
+        bool loaded = loadModelOBJ(path.toUtf8().constData(), object);
+        if (loaded) {
+            objects.push_back(object);
 
-    // Select new object
+            // Buffer new data to GPU
+            generateObjectBuffers(objects.back()); // Reference from objects vector, as it is moved in memory when placing into vector!
+        }
+    }
+
+    // Select last added object
     objectSelection->setCurrentIndex(static_cast<int>(objects.size() - 1));
 
     update(); // Redraw scene
+}
 
+bool WidgetOpenGLDraw::loadModelOBJ(const char *path, Object &object) {
+    std::vector<uint32_t> vertexIndices, uvIndices, normalIndices;
+    std::vector<glm::vec3> tmpPositions;
+    std::vector<glm::vec2> tmpUvs;
+    std::vector<glm::vec3> tmpNormals;
+
+    std::ifstream ifs;
+    ifs.open(path);
+
+    // Read file
+    bool error = false;
+    while (!error) {
+        std::string lineHeader;
+        ifs >> lineHeader;
+        if (ifs.eof()) break;
+
+        if (lineHeader == "v") {
+            glm::vec3 vertex;
+            if (!(ifs >> vertex.x >> vertex.y >> vertex.z)) error = true;
+            tmpPositions.push_back(vertex);
+        } else if (lineHeader == "vt") {
+            glm::vec2 uv;
+            if (!(ifs >> uv.x >> uv.y)) error = true;
+            tmpUvs.push_back(uv);
+        } else if (lineHeader == "vn") {
+            glm::vec3 normal;
+            if (!(ifs >> normal.x >> normal.y >> normal.z)) error = true;
+            tmpNormals.push_back(normal);
+        } else if (lineHeader == "f") {
+            uint32_t vertexIndex[3], uvIndex[3], normalIndex[3];
+            char s; // Indices separated by '/' (slash)
+            if (!(ifs >> vertexIndex[0] >> s >> uvIndex[0] >> s >> normalIndex[0]
+                      >> vertexIndex[1] >> s >> uvIndex[1] >> s >> normalIndex[1]
+                      >> vertexIndex[2] >> s >> uvIndex[2] >> s >> normalIndex[2])) error = true;
+
+            vertexIndices.insert(vertexIndices.end(), {vertexIndex[0], vertexIndex[1], vertexIndex[2]});
+            uvIndices.insert(uvIndices.end(), {uvIndex[0], uvIndex[1], uvIndex[2]});
+            normalIndices.insert(normalIndices.end(), {normalIndex[0], normalIndex[1], normalIndex[2]});
+        } else {
+            // Probably a comment (or something else we don't support), eat up the rest of the line
+            ifs.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+        }
+    }
+
+    if (error) {
+        std::cerr << "File parsing failed! Possible unsupported format." << std::endl;
+        ifs.close();
+        return false;
+    }
+
+    // Rearrange data - OBJ indexes all parts separately, OpenGL only supports 1 index buffer
+    // Ignore OBJ indexing and just duplicate data for non-index usage (but still directly index them to keep the rest of the code clean)
+    // Each triangle
+    for (uint32_t v = 0; v < vertexIndices.size(); v += 3) {
+        // Each vertex of the triangle
+        for (uint32_t i = 0; i < 3; ++i) {
+            //  Get indices of wanted parts
+            uint32_t vertexIndex = vertexIndices[v + i];
+            glm::vec3 position = tmpPositions[vertexIndex - 1];
+
+            uint32_t uvIndex = uvIndices[v + i];
+            glm::vec2 uv = tmpUvs[uvIndex - 1];
+
+            uint32_t normalIndex = normalIndices[v + i];
+            glm::vec3 normal = tmpNormals[normalIndex - 1];
+
+            // Save parts into Vertex and use current overall index
+            object.vertices.push_back({position, glm::vec4(0.7f, 0, 0, 1), uv, normal});
+            object.indices.push_back(v + i);
+        }
+    }
+
+    ifs.close();
     return true;
 }
 
@@ -405,14 +466,14 @@ Object WidgetOpenGLDraw::makeCube(glm::vec3 baseVertex, GLuint baseIndex) {
 
     Object cube = {
         {
-            {baseVertex,                      rngColor},
-            {baseVertex + glm::vec3(1, 0, 0), rngColor},
-            {baseVertex + glm::vec3(1, 0, 1), rngColor},
-            {baseVertex + glm::vec3(0, 0, 1), rngColor},
-            {baseVertex + glm::vec3(0, 1, 0), rngColor},
-            {baseVertex + glm::vec3(1, 1, 0), rngColor},
-            {baseVertex + glm::vec3(1, 1, 1), rngColor},
-            {baseVertex + glm::vec3(0, 1, 1), rngColor}
+            {baseVertex,                      rngColor, glm::vec2(0.0f), glm::vec3(0.0f)},
+            {baseVertex + glm::vec3(1, 0, 0), rngColor, glm::vec2(0.0f), glm::vec3(0.0f)},
+            {baseVertex + glm::vec3(1, 0, 1), rngColor, glm::vec2(0.0f), glm::vec3(0.0f)},
+            {baseVertex + glm::vec3(0, 0, 1), rngColor, glm::vec2(0.0f), glm::vec3(0.0f)},
+            {baseVertex + glm::vec3(0, 1, 0), rngColor, glm::vec2(0.0f), glm::vec3(0.0f)},
+            {baseVertex + glm::vec3(1, 1, 0), rngColor, glm::vec2(0.0f), glm::vec3(0.0f)},
+            {baseVertex + glm::vec3(1, 1, 1), rngColor, glm::vec2(0.0f), glm::vec3(0.0f)},
+            {baseVertex + glm::vec3(0, 1, 1), rngColor, glm::vec2(0.0f), glm::vec3(0.0f)}
         },
         {
             baseIndex + 0, baseIndex + 1, baseIndex + 2, baseIndex + 2, baseIndex + 3, baseIndex + 0,
@@ -421,7 +482,9 @@ Object WidgetOpenGLDraw::makeCube(glm::vec3 baseVertex, GLuint baseIndex) {
             baseIndex + 1, baseIndex + 2, baseIndex + 6, baseIndex + 6, baseIndex + 5, baseIndex + 1,
             baseIndex + 2, baseIndex + 3, baseIndex + 7, baseIndex + 7, baseIndex + 6, baseIndex + 2,
             baseIndex + 3, baseIndex + 0, baseIndex + 7, baseIndex + 7, baseIndex + 4, baseIndex + 0
-        }
+        },
+        {},
+        {}
     };
 
     return cube;

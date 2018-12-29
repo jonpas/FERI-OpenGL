@@ -1,8 +1,10 @@
 #pragma once
 
 #include <iostream>
+#include <memory>
 #include <vector>
 #include <random>
+#include <fstream>
 
 #include <QApplication>
 #include <QOpenGLWidget>
@@ -10,14 +12,16 @@
 #include <QTime>
 #include <QMouseEvent>
 #include <QComboBox>
+#include <QFileInfo>
 
 #include <glm/glm.hpp>
 #include <glm/ext.hpp>
-#include <memory>
 
 struct Vertex {
     glm::vec3 position;
     glm::vec4 color;
+    glm::vec2 uv;
+    glm::vec3 normal;
 };
 
 struct Object {
@@ -25,26 +29,25 @@ struct Object {
 
     std::vector<Vertex> vertices;
     std::vector<GLuint> indices;
-    GLuint vertexBufferOffset;
-    GLuint indexBufferOffset;
-    GLuint vertexArrayObject;
+    std::vector<GLuint> uvIndices;
+    std::vector<GLuint> normalIndices;
+
+    GLuint VAO; // Vertex Array Object
+    GLuint VBO; // Vertex Buffer Object
+    GLuint IBO; // Index Buffer Object
 
     glm::vec3 translation = glm::vec3(0);
     glm::vec3 scale = glm::vec3(1);
     glm::vec3 rotation = glm::vec3(0);
 
-    Object() : name(""), vertices({}), indices({}) {}
-    Object(QString name_) : name(name_), vertices({}), indices({}) {}
-    Object(std::vector<Vertex> vertices_, std::vector<GLuint> indices_) : name(""), vertices(vertices_), indices(indices_) {}
-    Object(QString name_, std::vector<Vertex> vertices_, std::vector<GLuint> indices_) : name(name_), vertices(vertices_), indices(indices_) {}
-
-    ssize_t vertexBufferSize() const {
-        return static_cast<ssize_t>(vertices.size() * sizeof(Vertex));
-    }
-
-    ssize_t indexBufferSize() const {
-        return static_cast<ssize_t>(indices.size() * sizeof(GLuint));
-    }
+    Object()
+        : name(""), vertices({}), indices({}), uvIndices({}), normalIndices({}) {}
+    Object(QString name_)
+        : name(name_), vertices({}), indices({}), uvIndices({}), normalIndices({}) {}
+    Object(std::vector<Vertex> vertices_, std::vector<GLuint> indices_, std::vector<GLuint> uvIndices_, std::vector<GLuint> normalIndices_)
+        : name(""), vertices(vertices_), indices(indices_), uvIndices(uvIndices_), normalIndices(normalIndices_) {}
+    Object(QString name_, std::vector<Vertex> vertices_, std::vector<GLuint> indices_, std::vector<GLuint> uvIndices_, std::vector<GLuint> normalIndices_)
+        : name(name_), vertices(vertices_), indices(indices_), uvIndices(uvIndices_), normalIndices(normalIndices_) {}
 };
 
 class QOpenGLFunctions_3_3_Core;
@@ -58,13 +61,13 @@ public:
     ~WidgetOpenGLDraw() override;
 
     void handleKeys(QSet<int> keys, Qt::KeyboardModifiers modifiers);
-    bool loadObject(QString fileName);
+    void loadModelsFromFile(QStringList &paths);
 
     Object makeCube(glm::vec3 baseVertex, GLuint baseIndex = 0);
     Object makePyramid(glm::vec3 baseVertex, uint32_t rows, QString name = "");
 
 public slots:
-    void setObject(int index);
+    void selectObject(int index);
 
 protected:
     // OpenGL overrides
@@ -72,8 +75,7 @@ protected:
     void initializeGL() override;
     void resizeGL(int w, int h) override;
 
-    void updateBuffers();
-    void generateObjectVAO(Object *object);
+    void generateObjectBuffers(Object &object);
 
 private:
     QOpenGLFunctions_3_3_Core gl;
@@ -85,12 +87,7 @@ private:
     GLuint vertexShaderID;
     GLuint fragmentShaderID;
 
-    // Buffers
-    GLuint vertexBufferID;
-    GLuint indexBufferID;
-
     std::vector<Object> objects;
-    // Object pointers (no other accessors available at this time)
     Object *selectedObject;
 
     std::mt19937 rng;
@@ -116,4 +113,7 @@ private:
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
     void updateCameraFront();
+
+    // Format loaders
+    bool loadModelOBJ(const char *path, Object &object /* out */);
 };

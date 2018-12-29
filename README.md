@@ -4,13 +4,14 @@ OpenGL introduction application at Computer Graphics (slo. Računalniška Grafik
 
 ### Features
 
-- OpenGL Rendering
+- OpenGL Rendering in Qt with GLM
 - Projections (Perspective and Orthogonal)
 - Camera Translating and Rotating
 - Object Translating, Rotating and Scaling
-- Interleaved Buffering
-- Loading OBJ Files (TODO)
-- Multiple Objects Handling (TODO)
+- Interleaved Vertex Buffer
+- Loading OBJ Files Dynamically
+- Multiple Objects Handling
+  - Per-Model Buffers
 - Textures (TODO)
 - Blinn-Phong Shading/Reflection Model (TODO)
 - Bump Mapping (TODO)

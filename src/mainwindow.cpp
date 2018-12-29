@@ -38,11 +38,8 @@ void MainWindow::resetOpenGLContext() {
 }
 
 void MainWindow::on_openFileButton_clicked() {
-    QStringList fileNames = QFileDialog::getOpenFileNames(this, "Load Object", "Object (*.obj)");
+    QStringList paths = QFileDialog::getOpenFileNames(this, "Load Object", "Object (*.obj)");
 
     resetOpenGLContext();
-
-    for (auto &fileName : fileNames) {
-        ui->widget->loadObject(fileName);
-    }
+    ui->widget->loadModelsFromFile(paths);
 }
