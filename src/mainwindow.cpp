@@ -37,9 +37,22 @@ void MainWindow::resetOpenGLContext() {
     ui->widget->makeCurrent();
 }
 
-void MainWindow::on_openFileButton_clicked() {
-    QStringList paths = QFileDialog::getOpenFileNames(this, "Load Object", "Object (*.obj)");
+void MainWindow::on_loadObjectButton_clicked() {
+    QStringList paths = QFileDialog::getOpenFileNames(this, "Select Object(s)", "Object (*.obj)");
 
     resetOpenGLContext();
-    ui->widget->loadModelsFromFile(paths);
+
+    if (!paths.empty()) {
+        ui->widget->loadModelsFromFile(paths);
+    }
+}
+
+void MainWindow::on_applyTextureButton_clicked() {
+    QString path = QFileDialog::getOpenFileName(this, "Select Texture", "Texture (*.png *.jpg *.jpeg)");
+
+    resetOpenGLContext();
+
+    if (path != "") {
+        ui->widget->applyTextureFromFile(path);
+    }
 }

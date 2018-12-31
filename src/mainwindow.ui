@@ -28,17 +28,34 @@
        </widget>
       </item>
       <item>
-       <widget class="QPushButton" name="openFileButton">
-        <property name="focusPolicy">
-         <enum>Qt::NoFocus</enum>
-        </property>
-        <property name="toolTip">
-         <string>Load models from OBJ files</string>
-        </property>
-        <property name="text">
-         <string>Load Object</string>
-        </property>
-       </widget>
+       <layout class="QHBoxLayout" name="horizontalLayout_2">
+        <item>
+         <widget class="QPushButton" name="loadObjectButton">
+          <property name="focusPolicy">
+           <enum>Qt::NoFocus</enum>
+          </property>
+          <property name="toolTip">
+           <string>Load models from OBJ files</string>
+          </property>
+          <property name="text">
+           <string>Load Object</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="applyTextureButton">
+          <property name="focusPolicy">
+           <enum>Qt::TabFocus</enum>
+          </property>
+          <property name="toolTip">
+           <string>Apply a texture from a PNG/JPG file to selected object</string>
+          </property>
+          <property name="text">
+           <string>Apply Texture</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
       </item>
      </layout>
     </item>

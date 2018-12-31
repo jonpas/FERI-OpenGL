@@ -18,6 +18,7 @@ WidgetOpenGLDraw::~WidgetOpenGLDraw() {
         gl.glDeleteVertexArrays(1, &object.VAO);
         gl.glDeleteBuffers(1, &object.VBO);
         gl.glDeleteBuffers(1, &object.IBO);
+        gl.glDeleteBuffers(1, &object.TBO);
     }
 }
 
@@ -46,23 +47,29 @@ void WidgetOpenGLDraw::printShaderInfoLog(GLuint obj) {
 const GLchar* WidgetOpenGLDraw::vertexShaderSource = R"glsl(
     #version 330 core
     layout(location=0) in vec3 position;
-    layout(location=1) in vec4 color;
-    layout(location=2) in vec2 uv;
-    layout(location=3) in vec3 normal;
+    layout(location=1) in vec2 uv;
+    layout(location=2) in vec3 normal;
+
     uniform mat4 PVM;
-    out vec4 Color;
+
+    out vec2 TextureUV;
+
     void main() {
         gl_Position = PVM * vec4(position, 1);
-        Color = color;
+        TextureUV = uv;
     }
 )glsl";
 
 const GLchar* WidgetOpenGLDraw::fragmentShaderSource = R"glsl(
     #version 330 core
-    in vec4 Color;
+    uniform sampler2D TextureUnit;
+
+    in vec2 TextureUV;
+
     out vec4 outColor;
+
     void main() {
-        outColor = Color;
+        outColor = texture(TextureUnit, TextureUV);
     }
 )glsl";
 
@@ -119,16 +126,18 @@ void WidgetOpenGLDraw::initializeGL() {
         {
             "Ground",
             {
-                {glm::vec3(-5, 0, -5), glm::vec4(0.7f, 0, 0, 1), glm::vec2(0.0f), glm::vec3(0.0f)},
-                {glm::vec3(5, 0, -5),  glm::vec4(0.7f, 0, 0, 1), glm::vec2(0.0f), glm::vec3(0.0f)},
-                {glm::vec3(5, 0, 5),   glm::vec4(0.7f, 0, 0, 1), glm::vec2(0.0f), glm::vec3(0.0f)},
-                {glm::vec3(-5, 0, 5),  glm::vec4(0.7f, 0, 0, 1), glm::vec2(0.0f), glm::vec3(0.0f)}
+                {glm::vec3(-5, 0, -5), glm::vec2(1.0f, 1.0f), glm::vec3(0.0f)},
+                {glm::vec3(5, 0, -5),  glm::vec2(1.0f, 0.0f), glm::vec3(0.0f)},
+                {glm::vec3(5, 0, 5),   glm::vec2(0.0f, 0.0f), glm::vec3(0.0f)},
+                {glm::vec3(-5, 0, 5),  glm::vec2(0.0f, 1.0f), glm::vec3(0.0f)}
             },
-            {0, 1, 2, 2, 3, 0}, {}, {}
+            {0, 1, 2, 2, 3, 0}
         }
     };
+    applyTextureFromFile("../test/textures/bricks.jpg", &objects.back());
 
     objects.push_back(makePyramid(glm::vec3(-1, 0, -1), 3, "Pyramid 1"));
+    applyTextureFromFile("../test/textures/steelMesh.jpg", &objects.back());
 
     // Connect object selection ComboBox and fill it
     QObject::connect(objectSelection, SIGNAL(currentIndexChanged(int)), this, SLOT(selectObject(int)));
@@ -165,13 +174,11 @@ void WidgetOpenGLDraw::generateObjectBuffers(Object &object) {
 
     // Setup vertex attributes (specify layout of vertex data)
     gl.glEnableVertexAttribArray(0);  // We use: layout(location=0) and vec3 position;
-    gl.glEnableVertexAttribArray(1);  // We use: layout(location=1) and vec4 color;
-    gl.glEnableVertexAttribArray(2);  // We use: layout(location=2) and vec2 uv;
-    gl.glEnableVertexAttribArray(3);  // We use: layout(location=3) and vec3 normal;
+    gl.glEnableVertexAttribArray(1);  // We use: layout(location=1) and vec2 uv;
+    gl.glEnableVertexAttribArray(2);  // We use: layout(location=2) and vec3 normal;
     gl.glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<void *>(offsetof(Vertex, position)));
-    gl.glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<void *>(offsetof(Vertex, color)));
-    gl.glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<void *>(offsetof(Vertex, uv)));
-    gl.glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<void *>(offsetof(Vertex, normal)));
+    gl.glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<void *>(offsetof(Vertex, uv)));
+    gl.glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<void *>(offsetof(Vertex, normal)));
 
 #ifdef QT_DEBUG
     // Unbind to avoid accidental modification
@@ -182,6 +189,24 @@ void WidgetOpenGLDraw::generateObjectBuffers(Object &object) {
 
     // Add to object selection dropdown
     objectSelection->addItem(object.name);
+}
+
+void WidgetOpenGLDraw::generateObjectTextureBuffers(Object &object) {
+    if (object.textureImage.isNull()) {
+        std::cerr << "Generating object texture buffers failed! No image loaded and assigned to object!" << std::endl;
+        return;
+    }
+
+    // Delete pre-existing Texture Buffer in case it exists
+    gl.glDeleteBuffers(1, &object.TBO);
+
+    // Create and bind Texture Buffer and load texture into it (we only support 1 texture unit at this time)
+    glGenTextures(1, &object.TBO);
+    glBindTexture(GL_TEXTURE_2D, object.TBO);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, object.textureImage.width(), object.textureImage.height(), 0, GL_BGRA, GL_UNSIGNED_BYTE, object.textureImage.bits());
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR); // Use linear filtering for upscaled textures
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); // Use nearest neighbour filtering for downscaled textures
 }
 
 void WidgetOpenGLDraw::resizeGL(int w, int h) {
@@ -204,6 +229,15 @@ void WidgetOpenGLDraw::paintGL() {
 
     // Object
     for (const auto &object : objects) {
+        if (!object.textureImage.isNull()) {
+            // Bind texture to texture units
+            gl.glActiveTexture(GL_TEXTURE0); // We only support 1 texture unit at this time
+            gl.glBindTexture(GL_TEXTURE_2D, object.TBO);
+        } else {
+            // Unbind texture specifically to prevent error or already bound texture from being applied
+            gl.glBindTexture(GL_TEXTURE_2D, 0);
+        }
+
         gl.glBindVertexArray(object.VAO);
 
         // Model matrix (object movement)
@@ -219,6 +253,7 @@ void WidgetOpenGLDraw::paintGL() {
 
         // Uniforms
         gl.glUniformMatrix4fv(gl.glGetUniformLocation(programShaderID, "PVM"), 1, GL_FALSE, glm::value_ptr(PVM));
+        gl.glUniform1i(gl.glGetUniformLocation(programShaderID, "TextureUnit"), 0);
 
         // Draw
         gl.glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(object.indices.size()), GL_UNSIGNED_INT, nullptr);
@@ -384,6 +419,26 @@ void WidgetOpenGLDraw::loadModelsFromFile(QStringList &paths) {
     update(); // Redraw scene
 }
 
+void WidgetOpenGLDraw::applyTextureFromFile(QString path, Object *object) {
+    QImage img;
+    if (!img.load(path)) {
+        std::cerr << "Texture loading failed! Possible unsupported format." << std::endl;
+        return;
+    }
+
+    if (object == nullptr) {
+        object = selectedObject;
+    }
+
+    img = img.convertToFormat(QImage::Format_ARGB32);
+    object->textureImage = img;
+
+    // Buffer new data to GPU
+    generateObjectTextureBuffers(*object);
+
+    update(); // Redraw scene
+}
+
 bool WidgetOpenGLDraw::loadModelOBJ(const char *path, Object &object) {
     std::vector<uint32_t> vertexIndices, uvIndices, normalIndices;
     std::vector<glm::vec3> tmpPositions;
@@ -429,7 +484,7 @@ bool WidgetOpenGLDraw::loadModelOBJ(const char *path, Object &object) {
     }
 
     if (error) {
-        std::cerr << "File parsing failed! Possible unsupported format." << std::endl;
+        std::cerr << "Model OBJ file parsing failed! Possible unsupported format." << std::endl;
         ifs.close();
         return false;
     }
@@ -451,7 +506,7 @@ bool WidgetOpenGLDraw::loadModelOBJ(const char *path, Object &object) {
             glm::vec3 normal = tmpNormals[normalIndex - 1];
 
             // Save parts into Vertex and use current overall index
-            object.vertices.push_back({position, glm::vec4(0.7f, 0, 0, 1), uv, normal});
+            object.vertices.push_back({position, uv, normal});
             object.indices.push_back(v + i);
         }
     }
@@ -462,29 +517,37 @@ bool WidgetOpenGLDraw::loadModelOBJ(const char *path, Object &object) {
 
 Object WidgetOpenGLDraw::makeCube(glm::vec3 baseVertex, GLuint baseIndex) {
     std::uniform_real_distribution<float> dist(0, 1);
-    glm::vec4 rngColor = glm::vec4(dist(rng), dist(rng), dist(rng), 1);
 
     Object cube = {
+        // Some vertices duplicated to fit indexing of UVs and Normals
         {
-            {baseVertex,                      rngColor, glm::vec2(0.0f), glm::vec3(0.0f)},
-            {baseVertex + glm::vec3(1, 0, 0), rngColor, glm::vec2(0.0f), glm::vec3(0.0f)},
-            {baseVertex + glm::vec3(1, 0, 1), rngColor, glm::vec2(0.0f), glm::vec3(0.0f)},
-            {baseVertex + glm::vec3(0, 0, 1), rngColor, glm::vec2(0.0f), glm::vec3(0.0f)},
-            {baseVertex + glm::vec3(0, 1, 0), rngColor, glm::vec2(0.0f), glm::vec3(0.0f)},
-            {baseVertex + glm::vec3(1, 1, 0), rngColor, glm::vec2(0.0f), glm::vec3(0.0f)},
-            {baseVertex + glm::vec3(1, 1, 1), rngColor, glm::vec2(0.0f), glm::vec3(0.0f)},
-            {baseVertex + glm::vec3(0, 1, 1), rngColor, glm::vec2(0.0f), glm::vec3(0.0f)}
+            {baseVertex + glm::vec3(0, 1, 0), glm::vec2(0.0f, 0.66f), glm::vec3(0.0f)},
+            {baseVertex + glm::vec3(0, 0, 0), glm::vec2(0.25f, 0.66f), glm::vec3(0.0f)},
+            {baseVertex + glm::vec3(1, 1, 0), glm::vec2(0.0f, 0.33f), glm::vec3(0.0f)},
+            {baseVertex + glm::vec3(1, 0, 0), glm::vec2(0.25f, 0.33f), glm::vec3(0.0f)},
+
+            {baseVertex + glm::vec3(0, 0, 1), glm::vec2(0.5f, 0.66f), glm::vec3(0.0f)},
+            {baseVertex + glm::vec3(1, 0, 1), glm::vec2(0.5f, 0.33f), glm::vec3(0.0f)},
+            {baseVertex + glm::vec3(0, 1, 1), glm::vec2(0.75f, 0.66f), glm::vec3(0.0f)},
+            {baseVertex + glm::vec3(1, 1, 1), glm::vec2(0.75f, 0.33f), glm::vec3(0.0f)},
+
+            {baseVertex + glm::vec3(0, 1, 0), glm::vec2(1.0f, 0.66f), glm::vec3(0.0f)},
+            {baseVertex + glm::vec3(1, 1, 0), glm::vec2(1.0f, 0.33f), glm::vec3(0.0f)},
+
+            {baseVertex + glm::vec3(0, 1, 0), glm::vec2(0.25f, 1.0f), glm::vec3(0.0f)},
+            {baseVertex + glm::vec3(0, 1, 1), glm::vec2(0.5f, 1.0f), glm::vec3(0.0f)},
+
+            {baseVertex + glm::vec3(1, 1, 0), glm::vec2(0.25f, 0.0f), glm::vec3(0.0f)},
+            {baseVertex + glm::vec3(1, 1, 1), glm::vec2(0.5f, 0.0f), glm::vec3(0.0f)},
         },
         {
-            baseIndex + 0, baseIndex + 1, baseIndex + 2, baseIndex + 2, baseIndex + 3, baseIndex + 0,
-            baseIndex + 4, baseIndex + 5, baseIndex + 6, baseIndex + 6, baseIndex + 7, baseIndex + 4,
-            baseIndex + 0, baseIndex + 1, baseIndex + 5, baseIndex + 5, baseIndex + 4, baseIndex + 0,
-            baseIndex + 1, baseIndex + 2, baseIndex + 6, baseIndex + 6, baseIndex + 5, baseIndex + 1,
-            baseIndex + 2, baseIndex + 3, baseIndex + 7, baseIndex + 7, baseIndex + 6, baseIndex + 2,
-            baseIndex + 3, baseIndex + 0, baseIndex + 7, baseIndex + 7, baseIndex + 4, baseIndex + 0
-        },
-        {},
-        {}
+            baseIndex + 0, baseIndex + 2, baseIndex + 1,baseIndex + 1, baseIndex + 2, baseIndex + 3, // Front
+            baseIndex + 4, baseIndex + 5, baseIndex + 6, baseIndex + 5, baseIndex + 7, baseIndex + 6, // Back
+            baseIndex + 6, baseIndex + 7, baseIndex + 8, baseIndex + 7, baseIndex + 9, baseIndex + 8, // Top
+            baseIndex + 1, baseIndex + 3, baseIndex + 4, baseIndex + 3, baseIndex + 5, baseIndex + 4, // Bottom
+            baseIndex + 1, baseIndex + 11, baseIndex + 10, baseIndex + 1, baseIndex + 4, baseIndex + 11, // Left
+            baseIndex + 3, baseIndex + 12, baseIndex + 5, baseIndex + 5, baseIndex + 12, baseIndex + 13 // Right
+        }
     };
 
     return cube;

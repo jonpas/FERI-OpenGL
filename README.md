@@ -12,7 +12,7 @@ OpenGL introduction application at Computer Graphics (slo. Računalniška Grafik
 - Loading OBJ Files Dynamically
 - Multiple Objects Handling
   - Per-Model Buffers
-- Textures (TODO)
+- Textures
 - Blinn-Phong Shading/Reflection Model (TODO)
 - Bump Mapping (TODO)
 

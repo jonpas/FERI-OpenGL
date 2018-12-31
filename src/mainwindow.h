@@ -25,5 +25,6 @@ private:
     void resetOpenGLContext();
 
 private slots:
-    void on_openFileButton_clicked();
+    void on_loadObjectButton_clicked();
+    void on_applyTextureButton_clicked();
 };
