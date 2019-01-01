@@ -56,3 +56,78 @@ void MainWindow::on_applyTextureButton_clicked() {
         ui->widget->applyTextureFromFile(path);
     }
 }
+
+void MainWindow::on_lightColorButton_clicked() {
+    QColor color = QColorDialog::getColor();
+
+    resetOpenGLContext();
+
+    if (color.isValid()) {
+        ui->widget->light.color = {color.redF(), color.greenF(), color.blueF()};
+        ui->widget->update(); // Redraw scene
+    }
+}
+
+void MainWindow::on_objectAmbientColorButton_clicked() {
+    if (!ui->widget->isMeshObjectSelected()) {
+        std::cerr << "Ambient color can only be applied to a mesh object" << std::endl;
+        return;
+    }
+
+    QColor color = QColorDialog::getColor();
+
+    resetOpenGLContext();
+
+    if (color.isValid()) {
+        MeshObject *object = static_cast<MeshObject *>(ui->widget->selectedObject);
+        object->material.ambientColor = {color.redF(), color.greenF(), color.blueF()};
+        ui->widget->update(); // Redraw scene
+    }
+}
+
+void MainWindow::on_objectDiffuseColorButton_clicked() {
+    if (!ui->widget->isMeshObjectSelected()) {
+        std::cerr << "Diffuse color can only be applied to a mesh object" << std::endl;
+        return;
+    }
+
+    QColor color = QColorDialog::getColor();
+
+    resetOpenGLContext();
+
+    if (color.isValid()) {
+        MeshObject *object = static_cast<MeshObject *>(ui->widget->selectedObject);
+        object->material.diffuseColor = {color.redF(), color.greenF(), color.blueF()};
+        ui->widget->update(); // Redraw scene
+    }
+}
+
+void MainWindow::on_objectSpecularColorButton_clicked() {
+    if (!ui->widget->isMeshObjectSelected()) {
+        std::cerr << "Specular color can only be applied to a mesh object" << std::endl;
+        return;
+    }
+
+    QColor color = QColorDialog::getColor();
+
+    resetOpenGLContext();
+
+    if (color.isValid()) {
+        MeshObject *object = static_cast<MeshObject *>(ui->widget->selectedObject);
+        object->material.specularColor = {color.redF(), color.greenF(), color.blueF()};
+        ui->widget->update(); // Redraw scene
+    }
+}
+
+void MainWindow::on_objectSpecularPowerSlider_valueChanged(int value) {
+    if (!ui->widget->isMeshObjectSelected()) {
+        std::cerr << "Shininess can only be applied to a mesh object" << std::endl;
+        return;
+    }
+
+    resetOpenGLContext();
+
+    MeshObject *object = static_cast<MeshObject *>(ui->widget->selectedObject);
+    object->material.specularPower = value;
+    ui->widget->update(); // Redraw scene
+}

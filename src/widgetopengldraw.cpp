@@ -50,26 +50,83 @@ const GLchar* WidgetOpenGLDraw::vertexShaderSource = R"glsl(
     layout(location=1) in vec2 uv;
     layout(location=2) in vec3 normal;
 
-    uniform mat4 PVM;
+    uniform mat4 P;
+    uniform mat4 V;
+    uniform mat4 M;
 
     out vec2 TextureUV;
+    out vec3 VertexPos;
+    out vec3 NormalInterp;
+
+    mat4 normalMatrix = transpose(inverse(M)); // TODO V or M ??? (Ground works from both sides if V, but it's same on both sides, only distance matters)
 
     void main() {
-        gl_Position = PVM * vec4(position, 1);
+        gl_Position = P * V * M * vec4(position, 1.0); // PVM = Final render matrix
         TextureUV = uv;
+
+        vec4 vertPos4 = M * vec4(position, 1.0);
+        VertexPos = vec3(vertPos4) / vertPos4.w;
+        NormalInterp = vec3(normalMatrix * vec4(normal, 0.0));
     }
 )glsl";
 
 const GLchar* WidgetOpenGLDraw::fragmentShaderSource = R"glsl(
     #version 330 core
+    // Mesh
     uniform sampler2D TextureUnit;
+    // Light
+    uniform vec3 LightPos;
+    uniform float LightPower;
+    uniform vec3 LightColor;
+    // Material
+    uniform vec3 AmbientColor;
+    uniform vec3 DiffuseColor;
+    uniform vec3 SpecularColor;
+    uniform float SpecularPower; // Shininess factor
 
     in vec2 TextureUV;
+    in vec3 VertexPos;
+    in vec3 NormalInterp;
 
     out vec4 outColor;
 
+    const float screenGamma = 2.2; // Assume the monitor is calibrated to the sRGB color space
+
+    // Blinn-Phon shading model, gamma corrected
+    vec3 calculateShading() {
+        vec3 normal = normalize(NormalInterp);
+        vec3 lightDir = LightPos - VertexPos;
+        float distance = length(lightDir);
+        distance = distance * distance;
+        lightDir = normalize(lightDir);
+
+        float lambertian = max(dot(lightDir, normal), 0.0);
+        float specular = 0.0;
+
+        if (lambertian > 0.0) {
+            vec3 viewDir = normalize(-VertexPos);
+
+            // Blinn-Phong
+            vec3 halfDir = normalize(lightDir + viewDir);
+            float specAngle = max(dot(halfDir, normal), 0.0);
+            specular = pow(specAngle, SpecularPower);
+        }
+
+        vec3 colorLinear = AmbientColor +
+                           DiffuseColor * lambertian * LightColor * LightPower / distance +
+                           SpecularColor * specular * LightColor * LightPower / distance;
+
+        // Apply gamma correction (assume AmbientColor, DiffuseColor and SpecularColor
+        // have been linearized, i.e. have no gamma correction in them)
+        return pow(colorLinear, vec3(1.0 / screenGamma));
+    }
+
     void main() {
-        outColor = texture(TextureUnit, TextureUV);
+        // Calculate lighting/shading/reflection
+        vec3 colorGammaCorrected = calculateShading();
+
+        // Apply texture and use the gamma corrected color in the fragment
+        outColor = texture(TextureUnit, TextureUV) * vec4(colorGammaCorrected, 1.0);
     }
 )glsl";
 
@@ -102,7 +159,7 @@ void WidgetOpenGLDraw::compileShaders() {
 
 void WidgetOpenGLDraw::initializeGL() {
     // Load OpenGL functions
-    std::cout << "OpenGL context version: "<< context()->format().majorVersion() <<"." <<context()->format().minorVersion()<<std::endl;
+    std::cout << "OpenGL context version: " << context()->format().majorVersion() << "." << context()->format().minorVersion() << std::endl;
 
     if (!gl.initializeOpenGLFunctions()) {
         std::cerr << "Required openGL not supported" << std::endl;
@@ -121,27 +178,46 @@ void WidgetOpenGLDraw::initializeGL() {
     // Draw both faces of triangles
     // glDisable(GL_CULL_FACE);
 
-    // Define data
+    // Define data (test objects)
+    light = {
+        "Light", {0.0f, 2.0f, 0.0f}, 40.0f
+    };
+
     objects = {
         {
             "Ground",
             {
-                {glm::vec3(-5, 0, -5), glm::vec2(1.0f, 1.0f), glm::vec3(0.0f)},
-                {glm::vec3(5, 0, -5),  glm::vec2(1.0f, 0.0f), glm::vec3(0.0f)},
-                {glm::vec3(5, 0, 5),   glm::vec2(0.0f, 0.0f), glm::vec3(0.0f)},
-                {glm::vec3(-5, 0, 5),  glm::vec2(0.0f, 1.0f), glm::vec3(0.0f)}
+                // Lighting will only work from top (ground doesn't go upside down usually)
+                {glm::vec3(-5.0f, 0.0f, -5.0f), glm::vec2(1.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f)},
+                {glm::vec3(5.0f,  0.0f, -5.0f), glm::vec2(1.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f)},
+                {glm::vec3(5.0f,  0.0f, 5.0f),  glm::vec2(0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f)},
+                {glm::vec3(-5.0f, 0.0f, 5.0f),  glm::vec2(0.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f)}
             },
             {0, 1, 2, 2, 3, 0}
         }
     };
     applyTextureFromFile("../test/textures/bricks.jpg", &objects.back());
 
-    objects.push_back(makePyramid(glm::vec3(-1, 0, -1), 3, "Pyramid 1"));
+    objects.push_back(makePyramid(3, "Pyramid"));
+    objects.back().translation.x = -5.0f;
+    objects.back().translation.z = -5.0f;
+    applyTextureFromFile("../test/textures/bricks.jpg", &objects.back());
+
+    objects.push_back(makeCube("Cube"));
+    objects.back().translation.y += 5.0f;
+    applyTextureFromFile("../test/textures/bricks.jpg", &objects.back());
+
+    QStringList paths = {"../test/models/icoSphere.obj"};
+    loadModelsFromFile(paths, true);
+    objects.back().name = "IcoSphere";
     applyTextureFromFile("../test/textures/steelMesh.jpg", &objects.back());
 
     // Connect object selection ComboBox and fill it
     QObject::connect(objectSelection, SIGNAL(currentIndexChanged(int)), this, SLOT(selectObject(int)));
-    selectedObject = &objects.front(); // First selected object same as first selected ComboBox item
+
+    // Add light to object selection dropdown and make it first selected object (same as ComboBox)
+    objectSelection->addItem(light.name);
+    selectedObject = &light;
 
     // Buffer data to GPU
     for (auto &object : objects) {
@@ -157,7 +233,7 @@ void WidgetOpenGLDraw::initializeGL() {
     }
 }
 
-void WidgetOpenGLDraw::generateObjectBuffers(Object &object) {
+void WidgetOpenGLDraw::generateObjectBuffers(MeshObject &object) {
     // Create Vertex Array Object, carrying properties related with buffer (eg. state of glEnableVertexAttribArray etc.)
     gl.glGenVertexArrays(1, &object.VAO);
     gl.glBindVertexArray(object.VAO);
@@ -191,7 +267,7 @@ void WidgetOpenGLDraw::generateObjectBuffers(Object &object) {
     objectSelection->addItem(object.name);
 }
 
-void WidgetOpenGLDraw::generateObjectTextureBuffers(Object &object) {
+void WidgetOpenGLDraw::generateObjectTextureBuffers(MeshObject &object) {
     if (object.textureImage.isNull()) {
         std::cerr << "Generating object texture buffers failed! No image loaded and assigned to object!" << std::endl;
         return;
@@ -248,12 +324,18 @@ void WidgetOpenGLDraw::paintGL() {
         M = glm::rotate(M, object.rotation.z, glm::vec3(0, 1, 0));
         M = glm::scale(M, object.scale);
 
-        // Final render matrix
-        glm::mat4 PVM = P * V * M;
-
         // Uniforms
-        gl.glUniformMatrix4fv(gl.glGetUniformLocation(programShaderID, "PVM"), 1, GL_FALSE, glm::value_ptr(PVM));
+        gl.glUniformMatrix4fv(gl.glGetUniformLocation(programShaderID, "P"), 1, GL_FALSE, glm::value_ptr(P));
+        gl.glUniformMatrix4fv(gl.glGetUniformLocation(programShaderID, "V"), 1, GL_FALSE, glm::value_ptr(V));
+        gl.glUniformMatrix4fv(gl.glGetUniformLocation(programShaderID, "M"), 1, GL_FALSE, glm::value_ptr(M));
         gl.glUniform1i(gl.glGetUniformLocation(programShaderID, "TextureUnit"), 0);
+        gl.glUniform3fv(gl.glGetUniformLocation(programShaderID, "LightPos"), 1, glm::value_ptr(light.translation));
+        gl.glUniform1f(gl.glGetUniformLocation(programShaderID, "LightPower"), light.scale.x);
+        gl.glUniform3fv(gl.glGetUniformLocation(programShaderID, "LightColor"), 1, glm::value_ptr(light.color));
+        gl.glUniform3fv(gl.glGetUniformLocation(programShaderID, "AmbientColor"), 1, glm::value_ptr(object.material.ambientColor));
+        gl.glUniform3fv(gl.glGetUniformLocation(programShaderID, "DiffuseColor"), 1, glm::value_ptr(object.material.diffuseColor));
+        gl.glUniform3fv(gl.glGetUniformLocation(programShaderID, "SpecularColor"), 1, glm::value_ptr(object.material.specularColor));
+        gl.glUniform1f(gl.glGetUniformLocation(programShaderID, "SpecularPower"), object.material.specularPower);
 
         // Draw
         gl.glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(object.indices.size()), GL_UNSIGNED_INT, nullptr);
@@ -396,38 +478,55 @@ void WidgetOpenGLDraw::updateCameraFront() {
 }
 
 void WidgetOpenGLDraw::selectObject(int index) {
-    selectedObject = &objects.at(static_cast<uint32_t>(index));
+    if (index == 0) {
+        selectedObject = &light;
+    } else {
+        selectedObject = &objects.at(static_cast<uint32_t>(index - 1));
+    }
 }
 
-void WidgetOpenGLDraw::loadModelsFromFile(QStringList &paths) {
+bool WidgetOpenGLDraw::isMeshObjectSelected() {
+    return selectedObject != &light;
+}
+
+void WidgetOpenGLDraw::loadModelsFromFile(QStringList &paths, bool preload) {
     for (auto &path : paths) {
         QFileInfo fileInfo(path);
-        Object object(fileInfo.fileName());
+        MeshObject object(fileInfo.fileName());
 
         bool loaded = loadModelOBJ(path.toUtf8().constData(), object);
         if (loaded) {
             objects.push_back(object);
 
-            // Buffer new data to GPU
-            generateObjectBuffers(objects.back()); // Reference from objects vector, as it is moved in memory when placing into vector!
+            if (!preload) {
+                // Buffer new data to GPU
+                generateObjectBuffers(objects.back()); // Reference from objects vector, as it is moved in memory when placing into vector!
+            }
         }
     }
 
-    // Select last added object
-    objectSelection->setCurrentIndex(static_cast<int>(objects.size() - 1));
+    if (!preload) {
+        // Select last added object
+        objectSelection->setCurrentIndex(static_cast<int>(objects.size() - 1));
+    }
 
     update(); // Redraw scene
 }
 
-void WidgetOpenGLDraw::applyTextureFromFile(QString path, Object *object) {
-    QImage img;
-    if (!img.load(path)) {
-        std::cerr << "Texture loading failed! Possible unsupported format." << std::endl;
+void WidgetOpenGLDraw::applyTextureFromFile(QString path, MeshObject *object) {
+    if (!isMeshObjectSelected()) {
+        std::cerr << "Texture can only be applied to a mesh object!" << std::endl;
         return;
     }
 
     if (object == nullptr) {
-        object = selectedObject;
+        object = static_cast<MeshObject *>(selectedObject);
+    }
+
+    QImage img;
+    if (!img.load(path)) {
+        std::cerr << "Texture loading failed!" << std::endl;
+        return;
     }
 
     img = img.convertToFormat(QImage::Format_ARGB32);
@@ -439,7 +538,7 @@ void WidgetOpenGLDraw::applyTextureFromFile(QString path, Object *object) {
     update(); // Redraw scene
 }
 
-bool WidgetOpenGLDraw::loadModelOBJ(const char *path, Object &object) {
+bool WidgetOpenGLDraw::loadModelOBJ(const char *path, MeshObject &object) {
     std::vector<uint32_t> vertexIndices, uvIndices, normalIndices;
     std::vector<glm::vec3> tmpPositions;
     std::vector<glm::vec2> tmpUvs;
@@ -484,7 +583,7 @@ bool WidgetOpenGLDraw::loadModelOBJ(const char *path, Object &object) {
     }
 
     if (error) {
-        std::cerr << "Model OBJ file parsing failed! Possible unsupported format." << std::endl;
+        std::cerr << "Model OBJ file parsing failed!" << std::endl;
         ifs.close();
         return false;
     }
@@ -515,30 +614,35 @@ bool WidgetOpenGLDraw::loadModelOBJ(const char *path, Object &object) {
     return true;
 }
 
-Object WidgetOpenGLDraw::makeCube(glm::vec3 baseVertex, GLuint baseIndex) {
+MeshObject WidgetOpenGLDraw::makeCube(QString name) {
+    return makeCubeOffset(glm::vec3(0.0f, 0.0f, 0.0f), 0, name);
+}
+
+MeshObject WidgetOpenGLDraw::makeCubeOffset(glm::vec3 baseVertex, GLuint baseIndex, QString name) {
     std::uniform_real_distribution<float> dist(0, 1);
 
-    Object cube = {
-        // Some vertices duplicated to fit indexing of UVs and Normals
+    MeshObject cube = {
+        name,
+        // Some vertices duplicated to fit indexing of UVs
         {
-            {baseVertex + glm::vec3(0, 1, 0), glm::vec2(0.0f, 0.66f), glm::vec3(0.0f)},
-            {baseVertex + glm::vec3(0, 0, 0), glm::vec2(0.25f, 0.66f), glm::vec3(0.0f)},
-            {baseVertex + glm::vec3(1, 1, 0), glm::vec2(0.0f, 0.33f), glm::vec3(0.0f)},
-            {baseVertex + glm::vec3(1, 0, 0), glm::vec2(0.25f, 0.33f), glm::vec3(0.0f)},
+            {baseVertex + glm::vec3(0.0f, 1.0f, 0.0f), glm::vec2(0.0f, 0.66f),  glm::vec3(-1.0f, 2.0f, -1.0f)},
+            {baseVertex + glm::vec3(0.0f, 0.0f, 0.0f), glm::vec2(0.25f, 0.66f), glm::vec3(-1.0f, -1.0f, -1.0f)},
+            {baseVertex + glm::vec3(1.0f, 1.0f, 0.0f), glm::vec2(0.0f, 0.33f),  glm::vec3(2.0f, 2.0f, -1.0f)},
+            {baseVertex + glm::vec3(1.0f, 0.0f, 0.0f), glm::vec2(0.25f, 0.33f), glm::vec3(2.0f, -1.0f, -1.0f)},
 
-            {baseVertex + glm::vec3(0, 0, 1), glm::vec2(0.5f, 0.66f), glm::vec3(0.0f)},
-            {baseVertex + glm::vec3(1, 0, 1), glm::vec2(0.5f, 0.33f), glm::vec3(0.0f)},
-            {baseVertex + glm::vec3(0, 1, 1), glm::vec2(0.75f, 0.66f), glm::vec3(0.0f)},
-            {baseVertex + glm::vec3(1, 1, 1), glm::vec2(0.75f, 0.33f), glm::vec3(0.0f)},
+            {baseVertex + glm::vec3(0.0f, 0.0f, 1.0f), glm::vec2(0.5f, 0.66f),  glm::vec3(-1.0f, -1.0f, 2.0f)},
+            {baseVertex + glm::vec3(1.0f, 0.0f, 1.0f), glm::vec2(0.5f, 0.33f),  glm::vec3(2.0f, -1.0f, 2.0f)},
+            {baseVertex + glm::vec3(0.0f, 1.0f, 1.0f), glm::vec2(0.75f, 0.66f), glm::vec3(-1.0f, 2.0f, -1.0f)},
+            {baseVertex + glm::vec3(1.0f, 1.0f, 1.0f), glm::vec2(0.75f, 0.33f), glm::vec3(2.0f, 2.0f, 2.0f)},
 
-            {baseVertex + glm::vec3(0, 1, 0), glm::vec2(1.0f, 0.66f), glm::vec3(0.0f)},
-            {baseVertex + glm::vec3(1, 1, 0), glm::vec2(1.0f, 0.33f), glm::vec3(0.0f)},
+            {baseVertex + glm::vec3(0.0f, 1.0f, 0.0f), glm::vec2(1.0f, 0.66f),  glm::vec3(-1.0f, 2.0f, -1.0f)},
+            {baseVertex + glm::vec3(1.0f, 1.0f, 0.0f), glm::vec2(1.0f, 0.33f),  glm::vec3(2.0f, 2.0f, -1.0f)},
 
-            {baseVertex + glm::vec3(0, 1, 0), glm::vec2(0.25f, 1.0f), glm::vec3(0.0f)},
-            {baseVertex + glm::vec3(0, 1, 1), glm::vec2(0.5f, 1.0f), glm::vec3(0.0f)},
+            {baseVertex + glm::vec3(0.0f, 1.0f, 0.0f), glm::vec2(0.25f, 1.0f),  glm::vec3(-1.0f, 2.0f, -1.0f)},
+            {baseVertex + glm::vec3(0.0f, 1.0f, 1.0f), glm::vec2(0.5f, 1.0f),   glm::vec3(-1.0f, 2.0f, 2.0f)},
 
-            {baseVertex + glm::vec3(1, 1, 0), glm::vec2(0.25f, 0.0f), glm::vec3(0.0f)},
-            {baseVertex + glm::vec3(1, 1, 1), glm::vec2(0.5f, 0.0f), glm::vec3(0.0f)},
+            {baseVertex + glm::vec3(1.0f, 1.0f, 0.0f), glm::vec2(0.25f, 0.0f),  glm::vec3(2.0f, 2.0f, -1.0f)},
+            {baseVertex + glm::vec3(1.0f, 1.0f, 1.0f), glm::vec2(0.5f, 0.0f),   glm::vec3(2.0f, 2.0f, 2.0f)},
         },
         {
             baseIndex + 0, baseIndex + 2, baseIndex + 1,baseIndex + 1, baseIndex + 2, baseIndex + 3, // Front
@@ -553,15 +657,15 @@ Object WidgetOpenGLDraw::makeCube(glm::vec3 baseVertex, GLuint baseIndex) {
     return cube;
 }
 
-Object WidgetOpenGLDraw::makePyramid(glm::vec3 baseVertex, uint32_t rows, QString name) {
-    Object pyramid(name);
+MeshObject WidgetOpenGLDraw::makePyramid(uint32_t rows, QString name) {
+    MeshObject pyramid(name);
 
     float offset = 0.0f;
     for (uint32_t row = 0; row < rows; ++row) {
         for (uint32_t i = 0; i < rows - row; ++i) {
             for (uint32_t j = 0; j < rows - row; ++j) {
                 // Make cube and merge it into the pyramid
-                Object cube = makeCube(baseVertex + glm::vec3(offset + i, row, offset + j), static_cast<GLuint>(pyramid.vertices.size()));
+                MeshObject cube = makeCubeOffset(glm::vec3(offset + i, row, offset + j), static_cast<GLuint>(pyramid.vertices.size()));
                 pyramid.vertices.insert(std::end(pyramid.vertices), std::begin(cube.vertices), std::end(cube.vertices));
                 pyramid.indices.insert(std::end(pyramid.indices), std::begin(cube.indices), std::end(cube.indices));
             }
