@@ -392,13 +392,13 @@ void WidgetOpenGLDraw::loadObjectTexture(MeshObject &object) {
     object.boundingBoxMin = {INFINITY, INFINITY, INFINITY};
     object.boundingBoxMax = {-INFINITY, -INFINITY, -INFINITY};
     for (auto &vertex : object.vertices) {
-        object.boundingBoxMin.x = std::min(vertex.position.x, object.boundingBoxMin.x);
-        object.boundingBoxMin.y = std::min(vertex.position.y, object.boundingBoxMin.y);
-        object.boundingBoxMin.z = std::min(vertex.position.z, object.boundingBoxMin.z);
+        object.boundingBoxMin = {std::min(vertex.position.x, object.boundingBoxMin.x),
+                                 std::min(vertex.position.y, object.boundingBoxMin.y),
+                                 std::min(vertex.position.z, object.boundingBoxMin.z)};
 
-        object.boundingBoxMax.x = std::max(vertex.position.x, object.boundingBoxMax.x);
-        object.boundingBoxMax.y = std::max(vertex.position.y, object.boundingBoxMax.y);
-        object.boundingBoxMax.z = std::max(vertex.position.z, object.boundingBoxMax.z);
+        object.boundingBoxMax = {std::max(vertex.position.x, object.boundingBoxMax.x),
+                                 std::max(vertex.position.y, object.boundingBoxMax.y),
+                                 std::max(vertex.position.z, object.boundingBoxMax.z)};
     }
 }
 

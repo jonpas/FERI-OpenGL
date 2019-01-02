@@ -24,7 +24,6 @@ struct Vertex {
 };
 
 struct Material {
-    // TODO Below property modifications in UI
     glm::vec3 ambientColor = glm::vec3(0.1f);
     glm::vec3 diffuseColor = glm::vec3(0.5f);
     glm::vec3 specularColor = glm::vec3(1.0f);
