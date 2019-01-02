@@ -58,7 +58,7 @@ const GLchar* WidgetOpenGLDraw::vertexShaderSource = R"glsl(
     out vec3 VertexPos;
     out vec3 NormalInterp;
 
-    mat4 normalMatrix = transpose(inverse(M)); // TODO V or M ??? (Ground works from both sides if V, but it's same on both sides, only distance matters)
+    mat4 normalMatrix = transpose(inverse(M));
 
     void main() {
         gl_Position = P * V * M * vec4(position, 1.0); // PVM = Final render matrix
