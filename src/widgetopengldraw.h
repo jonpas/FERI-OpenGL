@@ -45,15 +45,21 @@ struct Object {
 struct MeshObject : Object {
     std::vector<Vertex> vertices;
     std::vector<GLuint> indices;
+
+    // Uniforms
     Material material;
+    GLuint textureMappingType; // 0 - Simple, 1 - Planar, 2 - Cylindrical, 3 - Spherical
+    GLuint textureMappingAxis; // 0 - X, 1 - Y, 2 - Z
 
-    QImage textureImage;
-    QImage bumpMapImage;
-
+    // Buffers
     GLuint VAO; // Vertex Array Object
     GLuint VBO; // Vertex Buffer Object
     GLuint IBO; // Index Buffer Object
     GLuint TBO[2]; // Texture Buffer Object (Texture, Bump Map)
+
+    // Helpers
+    QImage textureImage;
+    QImage bumpMapImage;
 
     MeshObject(QString name_)
         : Object(name_), vertices({}), indices({}) {}
@@ -99,7 +105,7 @@ public:
 
     // Loaders
     void loadModelsFromFile(QStringList &paths, bool preload = false);
-    void applyTextureFromFile(QString path, MeshObject *object = nullptr, bool preload = false);
+    void applyTextureFromFile(QString path, GLuint mappingType, GLuint mappingAxis, MeshObject *object = nullptr, bool preload = false);
     void applyBumpMapFromFile(QString path, MeshObject *object = nullptr, bool preload = false);
 
     // Generators

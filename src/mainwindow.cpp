@@ -47,15 +47,42 @@ void MainWindow::on_loadObjectButton_clicked() {
 }
 
 void MainWindow::on_applyTextureButton_clicked() {
+    if (!ui->widget->isMeshObjectSelected()) {
+        std::cerr << "Texture can only be applied to a mesh object" << std::endl;
+        return;
+    }
+
     QString path = QFileDialog::getOpenFileName(this, "Select Texture", "", "Texture (*.png *.jpg *.jpeg)");
     resetOpenGLContext();
 
     if (path != "") {
-        ui->widget->applyTextureFromFile(path);
+        QStringList mappingTypes = {"Simple", "Planar", "Cylindrical", "Spherical"};
+        QStringList mappingAxes = {"X", "Y", "Z"};
+
+        bool mappingTypeOk = false;
+        QString mappingType = QInputDialog::getItem(this, "Select Mapping Type", "Texture Mapping Type:", mappingTypes, 0, false, &mappingTypeOk);
+        resetOpenGLContext();
+
+        if (mappingTypeOk) {
+            bool mappingAxisOk = false;
+            QString mappingAxis = QInputDialog::getItem(this, "Select Mapping Axis", "Texture Mapping Axis:", mappingAxes, 0, false, &mappingAxisOk);
+            resetOpenGLContext();
+
+            if (mappingAxisOk) {
+                uint32_t type = static_cast<uint32_t>(mappingTypes.indexOf(mappingType));
+                uint32_t axis = static_cast<uint32_t>(mappingAxes.indexOf(mappingAxis));
+                ui->widget->applyTextureFromFile(path, type, axis);
+            }
+        }
     }
 }
 
 void MainWindow::on_applyBumpMapButton_clicked() {
+    if (!ui->widget->isMeshObjectSelected()) {
+        std::cerr << "Bump map can only be applied to a mesh object" << std::endl;
+        return;
+    }
+
     QString path = QFileDialog::getOpenFileName(this, "Select Bump Map", "", "Bump Map (*.png *.jpg *.jpeg)");
     resetOpenGLContext();
 

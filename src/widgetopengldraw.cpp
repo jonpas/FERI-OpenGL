@@ -46,6 +46,14 @@ void WidgetOpenGLDraw::printShaderInfoLog(GLuint obj) {
 
 const GLchar* WidgetOpenGLDraw::vertexShaderSource = R"glsl(
     #version 330 core
+    const uint MAPPING_TYPE_SIMPLE = uint(0);
+    const uint MAPPING_TYPE_PLANAR = uint(1);
+    const uint MAPPING_TYPE_CYLINDRICAL = uint(2);
+    const uint MAPPING_TYPE_SPHERICAL = uint(3);
+    const uint MAPPING_AXIS_X = uint(0);
+    const uint MAPPING_AXIS_Y = uint(1);
+    const uint MAPPING_AXIS_Z = uint(2);
+
     layout(location=0) in vec3 position;
     layout(location=1) in vec2 uv;
     layout(location=2) in vec3 normal;
@@ -53,14 +61,57 @@ const GLchar* WidgetOpenGLDraw::vertexShaderSource = R"glsl(
     uniform mat4 P;
     uniform mat4 V;
     uniform mat4 M;
+    uniform uint TextureMappingType;
+    uniform uint TextureMappingAxis;
 
     out vec2 TextureUV;
     out vec3 VertexPosition;
     out vec3 NormalInterpolated;
 
+    vec2 textureMapping(vec2 uv) {
+        // Bounding box
+
+        if (TextureMappingType == MAPPING_TYPE_SIMPLE) {
+            if (TextureMappingAxis == MAPPING_AXIS_X) {
+                TextureUV = uv;
+            } else if (TextureMappingAxis == MAPPING_AXIS_Y) {
+                TextureUV = uv; // TODO
+            } else if (TextureMappingAxis == MAPPING_AXIS_Z) {
+                TextureUV = uv; // TODO
+            }
+        } else if (TextureMappingType == MAPPING_TYPE_PLANAR) {
+            if (TextureMappingAxis == MAPPING_AXIS_X) {
+                TextureUV = uv; // TODO
+            } else if (TextureMappingAxis == MAPPING_AXIS_Y) {
+                TextureUV = uv; // TODO
+            } else if (TextureMappingAxis == MAPPING_AXIS_Z) {
+                TextureUV = uv; // TODO
+            }
+        } else if (TextureMappingType == MAPPING_TYPE_CYLINDRICAL) {
+            if (TextureMappingAxis == MAPPING_AXIS_X) {
+                TextureUV = uv; // TODO
+            } else if (TextureMappingAxis == MAPPING_AXIS_Y) {
+                TextureUV = uv; // TODO
+            } else if (TextureMappingAxis == MAPPING_AXIS_Z) {
+                TextureUV = uv; // TODO
+            }
+        } else if (TextureMappingType == MAPPING_TYPE_SPHERICAL) {
+            if (TextureMappingAxis == MAPPING_AXIS_X) {
+                TextureUV = uv; // TODO
+            } else if (TextureMappingAxis == MAPPING_AXIS_Y) {
+                TextureUV = uv; // TODO
+            } else if (TextureMappingAxis == MAPPING_AXIS_Z) {
+                TextureUV = uv; // TODO
+            }
+        }
+
+        return uv;
+    }
+
     void main() {
         gl_Position = P * V * M * vec4(position, 1.0); // PVM = Final render matrix
-        TextureUV = uv;
+
+        TextureUV = textureMapping(uv);
 
         vec4 vertPos4 = M * vec4(position, 1.0);
         VertexPosition = vec3(vertPos4) / vertPos4.w;
@@ -212,7 +263,7 @@ void WidgetOpenGLDraw::initializeGL() {
             {0, 1, 2, 2, 3, 0}
         }
     };
-    applyTextureFromFile("../test/textures/bricks.jpg", &objects.back(), true);
+    applyTextureFromFile("../test/textures/bricks.jpg", 0, 0, &objects.back(), true);
     applyBumpMapFromFile("../test/bumpMaps/bricks.jpg", &objects.back(), true);
 
     objects.push_back(makePyramid(3, "Pyramid"));
@@ -232,7 +283,7 @@ void WidgetOpenGLDraw::initializeGL() {
     loadModelsFromFile(paths, true);
     objects.back().name = "IcoSphere";
     objects.back().translation.x = -1.0f;
-    applyTextureFromFile("../test/textures/steelMesh.jpg", &objects.back(), true);
+    applyTextureFromFile("../test/textures/steelMesh.jpg", 0, 0, &objects.back(), true);
     applyBumpMapFromFile("../test/bumpMaps/metalScales.jpg", &objects.back(), true);
 
     // Connect object selection ComboBox and fill it
@@ -386,6 +437,8 @@ void WidgetOpenGLDraw::paintGL() {
         gl.glUniform3fv(gl.glGetUniformLocation(programShaderID, "DiffuseColor"), 1, glm::value_ptr(object.material.diffuseColor));
         gl.glUniform3fv(gl.glGetUniformLocation(programShaderID, "SpecularColor"), 1, glm::value_ptr(object.material.specularColor));
         gl.glUniform1f(gl.glGetUniformLocation(programShaderID, "SpecularPower"), object.material.specularPower);
+        gl.glUniform1ui(gl.glGetUniformLocation(programShaderID, "TextureMappingType"), object.textureMappingType);
+        gl.glUniform1ui(gl.glGetUniformLocation(programShaderID, "TextureMappingAxis"), object.textureMappingAxis);
 
         // Draw
         gl.glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(object.indices.size()), GL_UNSIGNED_INT, nullptr);
@@ -569,12 +622,7 @@ void WidgetOpenGLDraw::loadModelsFromFile(QStringList &paths, bool preload) {
     }
 }
 
-void WidgetOpenGLDraw::applyTextureFromFile(QString path, MeshObject *object, bool preload) {
-    if (!isMeshObjectSelected()) {
-        std::cerr << "Texture can only be applied to a mesh object! [" << object->name.toStdString() << "]" << std::endl;
-        return;
-    }
-
+void WidgetOpenGLDraw::applyTextureFromFile(QString path, GLuint mappingType, GLuint mappingAxis, MeshObject *object, bool preload) {
     if (object == nullptr) {
         object = static_cast<MeshObject *>(selectedObject);
     }
@@ -586,6 +634,8 @@ void WidgetOpenGLDraw::applyTextureFromFile(QString path, MeshObject *object, bo
     }
 
     object->textureImage = img.convertToFormat(QImage::Format_ARGB32);
+    object->textureMappingType = mappingType;
+    object->textureMappingAxis = mappingAxis;
 
     if (!preload) {
         // Buffer new data to GPU
@@ -596,11 +646,6 @@ void WidgetOpenGLDraw::applyTextureFromFile(QString path, MeshObject *object, bo
 }
 
 void WidgetOpenGLDraw::applyBumpMapFromFile(QString path, MeshObject *object, bool preload) {
-    if (!isMeshObjectSelected()) {
-        std::cerr << "Bump map can only be applied to a mesh object! [" << object->name.toStdString() << "]" << std::endl;
-        return;
-    }
-
     if (object == nullptr) {
         object = static_cast<MeshObject *>(selectedObject);
     }

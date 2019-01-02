@@ -3,6 +3,7 @@
 #include <QMainWindow>
 #include <QKeyEvent>
 #include <QFileDialog>
+#include <QInputDialog>
 #include <QColorDialog>
 
 namespace Ui {
