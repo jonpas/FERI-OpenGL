@@ -63,59 +63,83 @@ const GLchar* WidgetOpenGLDraw::vertexShaderSource = R"glsl(
     uniform mat4 M;
     uniform uint TextureMappingType;
     uniform uint TextureMappingAxis;
+    uniform vec3 BoundingBoxMin;
+    uniform vec3 BoundingBoxMax;
 
     out vec2 TextureUV;
     out vec3 VertexPosition;
     out vec3 NormalInterpolated;
 
     vec2 textureMapping(vec2 uv) {
-        // Bounding box
+        vec3 objectSize = BoundingBoxMax - BoundingBoxMin; // Distance from one edge of bounding box to another
+        vec3 objectCenter = BoundingBoxMin + objectSize / 2; // Bounding box center
+        vec3 objectCenterToVertex = position - objectCenter; // Vector from vertex to bounding box center
+        // GLSL atan(y, x): x and y parameters inversed!
 
         if (TextureMappingType == MAPPING_TYPE_SIMPLE) {
-            if (TextureMappingAxis == MAPPING_AXIS_X) {
-                TextureUV = uv;
-            } else if (TextureMappingAxis == MAPPING_AXIS_Y) {
-                TextureUV = uv; // TODO
-            } else if (TextureMappingAxis == MAPPING_AXIS_Z) {
-                TextureUV = uv; // TODO
+            if (TextureMappingAxis == MAPPING_AXIS_Y) {
+                uv = vec2(uv.y, uv.x);
             }
         } else if (TextureMappingType == MAPPING_TYPE_PLANAR) {
             if (TextureMappingAxis == MAPPING_AXIS_X) {
-                TextureUV = uv; // TODO
+                uv.x = (position.z - BoundingBoxMin.z) / objectSize.z;
+                uv.y = (position.y - BoundingBoxMin.y) / objectSize.y;
             } else if (TextureMappingAxis == MAPPING_AXIS_Y) {
-                TextureUV = uv; // TODO
+                uv.x = (position.x - BoundingBoxMin.x) / objectSize.x;
+                uv.y = (position.z - BoundingBoxMin.z) / objectSize.z;
             } else if (TextureMappingAxis == MAPPING_AXIS_Z) {
-                TextureUV = uv; // TODO
+                uv.x = (position.x - BoundingBoxMin.x) / objectSize.x;
+                uv.y = (position.y - BoundingBoxMin.y) / objectSize.y;
             }
         } else if (TextureMappingType == MAPPING_TYPE_CYLINDRICAL) {
+            float angle = 0.0f;
+
             if (TextureMappingAxis == MAPPING_AXIS_X) {
-                TextureUV = uv; // TODO
+                angle = atan(objectCenterToVertex.y, objectCenterToVertex.z) + 180.0f;
+                uv.y = objectCenterToVertex.x / objectSize.x + 0.5f;
             } else if (TextureMappingAxis == MAPPING_AXIS_Y) {
-                TextureUV = uv; // TODO
+                angle = atan(objectCenterToVertex.z, objectCenterToVertex.x) + 180.0f;
+                uv.y = objectCenterToVertex.y / objectSize.y + 0.5f;
             } else if (TextureMappingAxis == MAPPING_AXIS_Z) {
-                TextureUV = uv; // TODO
+                angle = atan(objectCenterToVertex.y, objectCenterToVertex.x) + 180.0f;
+                uv.y = objectCenterToVertex.z / objectSize.z + 0.5f;
             }
+
+            uv.x = angle / 360.0f;
         } else if (TextureMappingType == MAPPING_TYPE_SPHERICAL) {
+            float angle1 = 0.0f;
+            float angle2 = 0.0f;
+
             if (TextureMappingAxis == MAPPING_AXIS_X) {
-                TextureUV = uv; // TODO
+                angle1 = degrees(atan(objectCenterToVertex.y, objectCenterToVertex.z)) + 180.0f;
+                angle2 = degrees(asin(objectCenterToVertex.x / length(objectCenterToVertex)));
             } else if (TextureMappingAxis == MAPPING_AXIS_Y) {
-                TextureUV = uv; // TODO
+                angle1 = degrees(atan(objectCenterToVertex.z, objectCenterToVertex.x)) + 180.0f;
+                angle2 = degrees(asin(objectCenterToVertex.y / length(objectCenterToVertex)));
             } else if (TextureMappingAxis == MAPPING_AXIS_Z) {
-                TextureUV = uv; // TODO
+                angle1 = degrees(atan(objectCenterToVertex.y, objectCenterToVertex.x)) + 180.0f;
+                angle2 = degrees(asin(objectCenterToVertex.z / length(objectCenterToVertex)));
             }
+
+            uv.x = angle1 / 360.0f;
+            uv.y = angle2 / 180.0f + 0.5f;
         }
 
         return uv;
     }
 
     void main() {
-        gl_Position = P * V * M * vec4(position, 1.0); // PVM = Final render matrix
+        // Calculate final render matrix (PVM)
+        gl_Position = P * V * M * vec4(position, 1.0);
 
+        // Map texture by given type and axis
         TextureUV = textureMapping(uv);
 
+        // Calculate vertex position in global space
         vec4 vertPos4 = M * vec4(position, 1.0);
         VertexPosition = vec3(vertPos4) / vertPos4.w;
 
+        // Calculate normal interpolated around vertices
         mat4 normalMatrix = transpose(inverse(M));
         NormalInterpolated = vec3(normalMatrix * vec4(normal, 0.0));
     }
@@ -363,6 +387,19 @@ void WidgetOpenGLDraw::loadObjectTexture(MeshObject &object) {
     // Unbind to avoid accidental modification
     gl.glBindTexture(GL_TEXTURE_2D, 0);
 #endif
+
+    // Calculate bounding box
+    object.boundingBoxMin = {INFINITY, INFINITY, INFINITY};
+    object.boundingBoxMax = {-INFINITY, -INFINITY, -INFINITY};
+    for (auto &vertex : object.vertices) {
+        object.boundingBoxMin.x = std::min(vertex.position.x, object.boundingBoxMin.x);
+        object.boundingBoxMin.y = std::min(vertex.position.y, object.boundingBoxMin.y);
+        object.boundingBoxMin.z = std::min(vertex.position.z, object.boundingBoxMin.z);
+
+        object.boundingBoxMax.x = std::max(vertex.position.x, object.boundingBoxMax.x);
+        object.boundingBoxMax.y = std::max(vertex.position.y, object.boundingBoxMax.y);
+        object.boundingBoxMax.z = std::max(vertex.position.z, object.boundingBoxMax.z);
+    }
 }
 
 void WidgetOpenGLDraw::loadObjectBumpMap(MeshObject &object) {
@@ -439,6 +476,8 @@ void WidgetOpenGLDraw::paintGL() {
         gl.glUniform1f(gl.glGetUniformLocation(programShaderID, "SpecularPower"), object.material.specularPower);
         gl.glUniform1ui(gl.glGetUniformLocation(programShaderID, "TextureMappingType"), object.textureMappingType);
         gl.glUniform1ui(gl.glGetUniformLocation(programShaderID, "TextureMappingAxis"), object.textureMappingAxis);
+        gl.glUniform3fv(gl.glGetUniformLocation(programShaderID, "BoundingBoxMin"), 1, glm::value_ptr(object.boundingBoxMin));
+        gl.glUniform3fv(gl.glGetUniformLocation(programShaderID, "BoundingBoxMax"), 1, glm::value_ptr(object.boundingBoxMax));
 
         // Draw
         gl.glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(object.indices.size()), GL_UNSIGNED_INT, nullptr);

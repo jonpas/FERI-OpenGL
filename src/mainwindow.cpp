@@ -64,6 +64,10 @@ void MainWindow::on_applyTextureButton_clicked() {
         resetOpenGLContext();
 
         if (mappingTypeOk) {
+            if (mappingType == "Simple") {
+                mappingAxes.removeLast();
+            }
+
             bool mappingAxisOk = false;
             QString mappingAxis = QInputDialog::getItem(this, "Select Mapping Axis", "Texture Mapping Axis:", mappingAxes, 0, false, &mappingAxisOk);
             resetOpenGLContext();

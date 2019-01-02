@@ -13,10 +13,10 @@ OpenGL introduction application at Computer Graphics (slo. Računalniška Grafik
 - Multiple Objects Handling
   - Per-Model Buffers
 - Texture Mapping
-  - Simple UV
-  - Planar (TODO)
-  - Cylindrical (TODO)
-  - Spherical (TODO)
+  - Simple
+  - Planar
+  - Cylindrical
+  - Spherical
 - Blinn-Phong Shading/Reflection Model
   - Single Point Light
 - Bump (Height) Mapping

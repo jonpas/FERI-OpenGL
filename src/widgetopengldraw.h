@@ -50,6 +50,8 @@ struct MeshObject : Object {
     Material material;
     GLuint textureMappingType; // 0 - Simple, 1 - Planar, 2 - Cylindrical, 3 - Spherical
     GLuint textureMappingAxis; // 0 - X, 1 - Y, 2 - Z
+    glm::vec3 boundingBoxMin;
+    glm::vec3 boundingBoxMax;
 
     // Buffers
     GLuint VAO; // Vertex Array Object
