@@ -18,7 +18,7 @@ WidgetOpenGLDraw::~WidgetOpenGLDraw() {
         gl.glDeleteVertexArrays(1, &object.VAO);
         gl.glDeleteBuffers(1, &object.VBO);
         gl.glDeleteBuffers(1, &object.IBO);
-        gl.glDeleteBuffers(1, &object.TBO);
+        gl.glDeleteBuffers(2, object.TBO);
     }
 }
 
@@ -55,25 +55,26 @@ const GLchar* WidgetOpenGLDraw::vertexShaderSource = R"glsl(
     uniform mat4 M;
 
     out vec2 TextureUV;
-    out vec3 VertexPos;
-    out vec3 NormalInterp;
-
-    mat4 normalMatrix = transpose(inverse(M));
+    out vec3 VertexPosition;
+    out vec3 NormalInterpolated;
 
     void main() {
         gl_Position = P * V * M * vec4(position, 1.0); // PVM = Final render matrix
         TextureUV = uv;
 
         vec4 vertPos4 = M * vec4(position, 1.0);
-        VertexPos = vec3(vertPos4) / vertPos4.w;
-        NormalInterp = vec3(normalMatrix * vec4(normal, 0.0));
+        VertexPosition = vec3(vertPos4) / vertPos4.w;
+
+        mat4 normalMatrix = transpose(inverse(M));
+        NormalInterpolated = vec3(normalMatrix * vec4(normal, 0.0));
     }
 )glsl";
 
 const GLchar* WidgetOpenGLDraw::fragmentShaderSource = R"glsl(
     #version 330 core
     // Mesh
-    uniform sampler2D TextureUnit;
+    uniform sampler2D Texture;
+    uniform sampler2D BumpMap;
     // Light
     uniform vec3 LightPos;
     uniform float LightPower;
@@ -85,17 +86,28 @@ const GLchar* WidgetOpenGLDraw::fragmentShaderSource = R"glsl(
     uniform float SpecularPower; // Shininess factor
 
     in vec2 TextureUV;
-    in vec3 VertexPos;
-    in vec3 NormalInterp;
+    in vec3 VertexPosition;
+    in vec3 NormalInterpolated;
 
     out vec4 outColor;
 
     const float screenGamma = 2.2; // Assume the monitor is calibrated to the sRGB color space
 
+    // Bump mapping
+    vec3 bumpMappingFromHeight(vec3 normal, float height) {
+        float bumpU = dFdx(height);
+        float bumpV = dFdy(height);
+
+        vec3 sU = dFdx(VertexPosition);
+        vec3 sV = dFdy(VertexPosition);
+
+        vec3 d = bumpU * normalize(cross(normal, sV)) + bumpV * normalize(cross(sU, normal));
+        return normalize(normal + d);
+    }
+
     // Blinn-Phon shading model, gamma corrected
-    vec3 calculateShading() {
-        vec3 normal = normalize(NormalInterp);
-        vec3 lightDir = LightPos - VertexPos;
+    vec3 shading(vec3 normal) {
+        vec3 lightDir = LightPos - VertexPosition;
         float distance = length(lightDir);
         distance = distance * distance;
         lightDir = normalize(lightDir);
@@ -104,7 +116,7 @@ const GLchar* WidgetOpenGLDraw::fragmentShaderSource = R"glsl(
         float specular = 0.0;
 
         if (lambertian > 0.0) {
-            vec3 viewDir = normalize(-VertexPos);
+            vec3 viewDir = normalize(-VertexPosition);
 
             // Blinn-Phong
             vec3 halfDir = normalize(lightDir + viewDir);
@@ -122,11 +134,15 @@ const GLchar* WidgetOpenGLDraw::fragmentShaderSource = R"glsl(
     }
 
     void main() {
-        // Calculate lighting/shading/reflection
-        vec3 colorGammaCorrected = calculateShading();
+        // Apply bump mapping
+        float height = length(texture2D(BumpMap, TextureUV.st).xyz);
+        vec3 normal = bumpMappingFromHeight(NormalInterpolated, height);
+
+        // Apply lighting/shading/reflection
+        vec3 colorGammaCorrected = shading(normal);
 
         // Apply texture and use the gamma corrected color in the fragment
-        outColor = texture(TextureUnit, TextureUV) * vec4(colorGammaCorrected, 1.0);
+        outColor = texture(Texture, TextureUV) * vec4(colorGammaCorrected, 1.0);
     }
 )glsl";
 
@@ -175,8 +191,8 @@ void WidgetOpenGLDraw::initializeGL() {
     // In case we drive more overlapping triangles, we want front to cover the ones in the back
     glEnable(GL_DEPTH_TEST);
 
-    // Draw both faces of triangles
-    // glDisable(GL_CULL_FACE);
+    // Draw only one side of triangles
+    glEnable(GL_CULL_FACE);
 
     // Define data (test objects)
     light = {
@@ -188,29 +204,36 @@ void WidgetOpenGLDraw::initializeGL() {
             "Ground",
             {
                 // Lighting will only work from top (ground doesn't go upside down usually)
-                {glm::vec3(-5.0f, 0.0f, -5.0f), glm::vec2(1.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f)},
-                {glm::vec3(5.0f,  0.0f, -5.0f), glm::vec2(1.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f)},
+                {glm::vec3(-5.0f, 0.0f, 5.0f),  glm::vec2(0.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f)},
                 {glm::vec3(5.0f,  0.0f, 5.0f),  glm::vec2(0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f)},
-                {glm::vec3(-5.0f, 0.0f, 5.0f),  glm::vec2(0.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f)}
+                {glm::vec3(5.0f,  0.0f, -5.0f), glm::vec2(1.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f)},
+                {glm::vec3(-5.0f, 0.0f, -5.0f), glm::vec2(1.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f)},
             },
             {0, 1, 2, 2, 3, 0}
         }
     };
-    applyTextureFromFile("../test/textures/bricks.jpg", &objects.back());
+    applyTextureFromFile("../test/textures/bricks.jpg", &objects.back(), true);
+    applyBumpMapFromFile("../test/bumpMaps/bricks.jpg", &objects.back(), true);
 
     objects.push_back(makePyramid(3, "Pyramid"));
     objects.back().translation.x = -5.0f;
     objects.back().translation.z = -5.0f;
-    applyTextureFromFile("../test/textures/bricks.jpg", &objects.back());
+    applyBumpMapFromFile("../test/bumpMaps/leather.jpg", &objects.back(), true);
 
     objects.push_back(makeCube("Cube"));
-    objects.back().translation.y += 5.0f;
-    applyTextureFromFile("../test/textures/bricks.jpg", &objects.back());
+    objects.back().translation.y += 2.0f;
+    objects.back().translation.z += 5.0f;
+    QImage img2(512, 512, QImage::Format_RGB32);
+    img2.fill(Qt::red);
+    objects.back().textureImage = img2;
+    applyBumpMapFromFile("../test/bumpMaps/dots.jpg", &objects.back(), true);
 
     QStringList paths = {"../test/models/icoSphere.obj"};
     loadModelsFromFile(paths, true);
     objects.back().name = "IcoSphere";
-    applyTextureFromFile("../test/textures/steelMesh.jpg", &objects.back());
+    objects.back().translation.x = -1.0f;
+    applyTextureFromFile("../test/textures/steelMesh.jpg", &objects.back(), true);
+    applyBumpMapFromFile("../test/bumpMaps/metalScales.jpg", &objects.back(), true);
 
     // Connect object selection ComboBox and fill it
     QObject::connect(objectSelection, SIGNAL(currentIndexChanged(int)), this, SLOT(selectObject(int)));
@@ -222,6 +245,8 @@ void WidgetOpenGLDraw::initializeGL() {
     // Buffer data to GPU
     for (auto &object : objects) {
         generateObjectBuffers(object);
+        loadObjectTexture(object);
+        loadObjectBumpMap(object);
     }
 
     // Set background color
@@ -256,6 +281,9 @@ void WidgetOpenGLDraw::generateObjectBuffers(MeshObject &object) {
     gl.glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<void *>(offsetof(Vertex, uv)));
     gl.glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<void *>(offsetof(Vertex, normal)));
 
+    // Create Texture Buffer
+    gl.glGenTextures(2, object.TBO);
+
 #ifdef QT_DEBUG
     // Unbind to avoid accidental modification
     gl.glBindVertexArray(0); // VAO must be first!
@@ -267,22 +295,42 @@ void WidgetOpenGLDraw::generateObjectBuffers(MeshObject &object) {
     objectSelection->addItem(object.name);
 }
 
-void WidgetOpenGLDraw::generateObjectTextureBuffers(MeshObject &object) {
+void WidgetOpenGLDraw::loadObjectTexture(MeshObject &object) {
     if (object.textureImage.isNull()) {
-        std::cerr << "Generating object texture buffers failed! No image loaded and assigned to object!" << std::endl;
+        std::cerr << "Loading object texture failed! No texture image loaded for object! [" << object.name.toStdString() << "]" << std::endl;
         return;
     }
 
-    // Delete pre-existing Texture Buffer in case it exists
-    gl.glDeleteBuffers(1, &object.TBO);
+    // Bind Texture Buffer and load texture into it
+    gl.glBindTexture(GL_TEXTURE_2D, object.TBO[0]);
+    gl.glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, object.textureImage.width(), object.textureImage.height(), 0, GL_BGRA, GL_UNSIGNED_BYTE, object.textureImage.bits());
 
-    // Create and bind Texture Buffer and load texture into it (we only support 1 texture unit at this time)
-    glGenTextures(1, &object.TBO);
-    glBindTexture(GL_TEXTURE_2D, object.TBO);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, object.textureImage.width(), object.textureImage.height(), 0, GL_BGRA, GL_UNSIGNED_BYTE, object.textureImage.bits());
+    gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR); // Use linear filtering for upscaled textures
+    gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); // Use nearest neighbour filtering for downscaled textures
 
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR); // Use linear filtering for upscaled textures
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); // Use nearest neighbour filtering for downscaled textures
+#ifdef QT_DEBUG
+    // Unbind to avoid accidental modification
+    gl.glBindTexture(GL_TEXTURE_2D, 0);
+#endif
+}
+
+void WidgetOpenGLDraw::loadObjectBumpMap(MeshObject &object) {
+    if (object.bumpMapImage.isNull()) {
+        std::cerr << "Loading object bump map failed! No bump map image loaded for object! [" << object.name.toStdString() << "]" << std::endl;
+        return;
+    }
+
+    // Bind Texture Buffer and load bump map into it
+    gl.glBindTexture(GL_TEXTURE_2D, object.TBO[1]);
+    gl.glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, object.bumpMapImage.width(), object.bumpMapImage.height(), 0, GL_BGRA, GL_UNSIGNED_BYTE, object.bumpMapImage.bits());
+
+    gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+
+#ifdef QT_DEBUG
+    // Unbind to avoid accidental modification
+    gl.glBindTexture(GL_TEXTURE_2D, 0);
+#endif
 }
 
 void WidgetOpenGLDraw::resizeGL(int w, int h) {
@@ -305,13 +353,14 @@ void WidgetOpenGLDraw::paintGL() {
 
     // Object
     for (const auto &object : objects) {
+        // Bind textures to texture units
         if (!object.textureImage.isNull()) {
-            // Bind texture to texture units
-            gl.glActiveTexture(GL_TEXTURE0); // We only support 1 texture unit at this time
-            gl.glBindTexture(GL_TEXTURE_2D, object.TBO);
-        } else {
-            // Unbind texture specifically to prevent error or already bound texture from being applied
-            gl.glBindTexture(GL_TEXTURE_2D, 0);
+            gl.glActiveTexture(GL_TEXTURE0);
+            gl.glBindTexture(GL_TEXTURE_2D, object.TBO[0]); // Texture
+        }
+        if (!object.bumpMapImage.isNull()) {
+            gl.glActiveTexture(GL_TEXTURE1);
+            gl.glBindTexture(GL_TEXTURE_2D, object.TBO[1]); // Bump Map
         }
 
         gl.glBindVertexArray(object.VAO);
@@ -328,7 +377,8 @@ void WidgetOpenGLDraw::paintGL() {
         gl.glUniformMatrix4fv(gl.glGetUniformLocation(programShaderID, "P"), 1, GL_FALSE, glm::value_ptr(P));
         gl.glUniformMatrix4fv(gl.glGetUniformLocation(programShaderID, "V"), 1, GL_FALSE, glm::value_ptr(V));
         gl.glUniformMatrix4fv(gl.glGetUniformLocation(programShaderID, "M"), 1, GL_FALSE, glm::value_ptr(M));
-        gl.glUniform1i(gl.glGetUniformLocation(programShaderID, "TextureUnit"), 0);
+        gl.glUniform1i(gl.glGetUniformLocation(programShaderID, "Texture"), 0);
+        gl.glUniform1i(gl.glGetUniformLocation(programShaderID, "BumpMap"), 1);
         gl.glUniform3fv(gl.glGetUniformLocation(programShaderID, "LightPos"), 1, glm::value_ptr(light.translation));
         gl.glUniform1f(gl.glGetUniformLocation(programShaderID, "LightPower"), light.scale.x);
         gl.glUniform3fv(gl.glGetUniformLocation(programShaderID, "LightColor"), 1, glm::value_ptr(light.color));
@@ -340,6 +390,11 @@ void WidgetOpenGLDraw::paintGL() {
         // Draw
         gl.glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(object.indices.size()), GL_UNSIGNED_INT, nullptr);
 
+        // Unbind texture specifically to prevent error or already bound texture from being applied (and general cleanup)
+        gl.glActiveTexture(GL_TEXTURE0);
+        gl.glBindTexture(GL_TEXTURE_2D, 0);
+        gl.glActiveTexture(GL_TEXTURE1);
+        gl.glBindTexture(GL_TEXTURE_2D, 0);
 #ifdef QT_DEBUG
         // Unbind to avoid accidental modification
         gl.glBindVertexArray(0);
@@ -507,15 +562,16 @@ void WidgetOpenGLDraw::loadModelsFromFile(QStringList &paths, bool preload) {
 
     if (!preload) {
         // Select last added object
+        // (objects index + 1) due to light being at position 0 in ComboBox, but not in objects vector
         objectSelection->setCurrentIndex(static_cast<int>(objects.size()));
-    }
 
-    update(); // Redraw scene
+        update(); // Redraw scene
+    }
 }
 
-void WidgetOpenGLDraw::applyTextureFromFile(QString path, MeshObject *object) {
+void WidgetOpenGLDraw::applyTextureFromFile(QString path, MeshObject *object, bool preload) {
     if (!isMeshObjectSelected()) {
-        std::cerr << "Texture can only be applied to a mesh object!" << std::endl;
+        std::cerr << "Texture can only be applied to a mesh object! [" << object->name.toStdString() << "]" << std::endl;
         return;
     }
 
@@ -525,17 +581,44 @@ void WidgetOpenGLDraw::applyTextureFromFile(QString path, MeshObject *object) {
 
     QImage img;
     if (!img.load(path)) {
-        std::cerr << "Texture loading failed!" << std::endl;
+        std::cerr << "Texture image loading failed! [" << path.toStdString() << "]" << std::endl;
         return;
     }
 
-    img = img.convertToFormat(QImage::Format_ARGB32);
-    object->textureImage = img;
+    object->textureImage = img.convertToFormat(QImage::Format_ARGB32);
 
-    // Buffer new data to GPU
-    generateObjectTextureBuffers(*object);
+    if (!preload) {
+        // Buffer new data to GPU
+        loadObjectTexture(*object);
 
-    update(); // Redraw scene
+        update(); // Redraw scene
+    }
+}
+
+void WidgetOpenGLDraw::applyBumpMapFromFile(QString path, MeshObject *object, bool preload) {
+    if (!isMeshObjectSelected()) {
+        std::cerr << "Bump map can only be applied to a mesh object! [" << object->name.toStdString() << "]" << std::endl;
+        return;
+    }
+
+    if (object == nullptr) {
+        object = static_cast<MeshObject *>(selectedObject);
+    }
+
+    QImage img;
+    if (!img.load(path)) {
+        std::cerr << "Bump map image loading failed! [" << path.toStdString() << "]" << std::endl;
+        return;
+    }
+
+    object->bumpMapImage = img.convertToFormat(QImage::Format_ARGB32);
+
+    if (!preload) {
+        // Buffer new data to GPU
+        loadObjectBumpMap(*object);
+
+        update(); // Redraw scene
+    }
 }
 
 bool WidgetOpenGLDraw::loadModelOBJ(const char *path, MeshObject &object) {
@@ -583,7 +666,7 @@ bool WidgetOpenGLDraw::loadModelOBJ(const char *path, MeshObject &object) {
     }
 
     if (error) {
-        std::cerr << "Model OBJ file parsing failed!" << std::endl;
+        std::cerr << "Model OBJ file parsing failed! [" << path << "]" << std::endl;
         ifs.close();
         return false;
     }
@@ -619,8 +702,6 @@ MeshObject WidgetOpenGLDraw::makeCube(QString name) {
 }
 
 MeshObject WidgetOpenGLDraw::makeCubeOffset(glm::vec3 baseVertex, GLuint baseIndex, QString name) {
-    std::uniform_real_distribution<float> dist(0, 1);
-
     MeshObject cube = {
         name,
         // Some vertices duplicated to fit indexing of UVs
@@ -650,7 +731,7 @@ MeshObject WidgetOpenGLDraw::makeCubeOffset(glm::vec3 baseVertex, GLuint baseInd
             baseIndex + 6, baseIndex + 7, baseIndex + 8, baseIndex + 7, baseIndex + 9, baseIndex + 8, // Top
             baseIndex + 1, baseIndex + 3, baseIndex + 4, baseIndex + 3, baseIndex + 5, baseIndex + 4, // Bottom
             baseIndex + 1, baseIndex + 11, baseIndex + 10, baseIndex + 1, baseIndex + 4, baseIndex + 11, // Left
-            baseIndex + 3, baseIndex + 12, baseIndex + 5, baseIndex + 5, baseIndex + 12, baseIndex + 13 // Right
+            baseIndex + 3, baseIndex + 12, baseIndex + 5, baseIndex + 5, baseIndex + 12, baseIndex + 13, // Right
         }
     };
 
@@ -668,11 +749,20 @@ MeshObject WidgetOpenGLDraw::makePyramid(uint32_t rows, QString name) {
                 MeshObject cube = makeCubeOffset(glm::vec3(offset + i, row, offset + j), static_cast<GLuint>(pyramid.vertices.size()));
                 pyramid.vertices.insert(std::end(pyramid.vertices), std::begin(cube.vertices), std::end(cube.vertices));
                 pyramid.indices.insert(std::end(pyramid.indices), std::begin(cube.indices), std::end(cube.indices));
+                // Note: Normals should be corrected here, but they aren't
             }
         }
 
         offset += 0.5f;
     }
+
+    // Random solid color texture
+    std::uniform_int_distribution<> dist(0, 255);
+    QColor rngColor(dist(rng), dist(rng), dist(rng));
+
+    QImage img(1, 1, QImage::Format_ARGB32);
+    img.fill(rngColor);
+    pyramid.textureImage = img;
 
     return pyramid;
 }

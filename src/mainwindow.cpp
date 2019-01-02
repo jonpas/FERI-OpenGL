@@ -39,7 +39,6 @@ void MainWindow::resetOpenGLContext() {
 
 void MainWindow::on_loadObjectButton_clicked() {
     QStringList paths = QFileDialog::getOpenFileNames(this, "Select Object(s)", "Object (*.obj)");
-
     resetOpenGLContext();
 
     if (!paths.empty()) {
@@ -49,7 +48,6 @@ void MainWindow::on_loadObjectButton_clicked() {
 
 void MainWindow::on_applyTextureButton_clicked() {
     QString path = QFileDialog::getOpenFileName(this, "Select Texture", "Texture (*.png *.jpg *.jpeg)");
-
     resetOpenGLContext();
 
     if (path != "") {
@@ -57,9 +55,17 @@ void MainWindow::on_applyTextureButton_clicked() {
     }
 }
 
+void MainWindow::on_applyBumpMapButton_clicked() {
+    QString path = QFileDialog::getOpenFileName(this, "Select Bump Map", "Bump Map (*.png *.jpg *.jpeg)");
+    resetOpenGLContext();
+
+    if (path != "") {
+        ui->widget->applyBumpMapFromFile(path);
+    }
+}
+
 void MainWindow::on_lightColorButton_clicked() {
     QColor color = QColorDialog::getColor();
-
     resetOpenGLContext();
 
     if (color.isValid()) {
@@ -75,7 +81,6 @@ void MainWindow::on_objectAmbientColorButton_clicked() {
     }
 
     QColor color = QColorDialog::getColor();
-
     resetOpenGLContext();
 
     if (color.isValid()) {
@@ -92,7 +97,6 @@ void MainWindow::on_objectDiffuseColorButton_clicked() {
     }
 
     QColor color = QColorDialog::getColor();
-
     resetOpenGLContext();
 
     if (color.isValid()) {
@@ -109,7 +113,6 @@ void MainWindow::on_objectSpecularColorButton_clicked() {
     }
 
     QColor color = QColorDialog::getColor();
-
     resetOpenGLContext();
 
     if (color.isValid()) {
@@ -124,8 +127,6 @@ void MainWindow::on_objectSpecularPowerSlider_valueChanged(int value) {
         std::cerr << "Shininess can only be applied to a mesh object" << std::endl;
         return;
     }
-
-    resetOpenGLContext();
 
     MeshObject *object = static_cast<MeshObject *>(ui->widget->selectedObject);
     object->material.specularPower = value;

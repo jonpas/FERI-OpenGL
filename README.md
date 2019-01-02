@@ -19,7 +19,7 @@ OpenGL introduction application at Computer Graphics (slo. Računalniška Grafik
   - Spherical (TODO)
 - Blinn-Phong Shading/Reflection Model
   - Single Point Light
-- Bump Mapping (TODO)
+- Bump (Height) Mapping
 
 **Controls:**
 - Camera

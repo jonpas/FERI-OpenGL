@@ -28,6 +28,7 @@ private:
 private slots:
     void on_loadObjectButton_clicked();
     void on_applyTextureButton_clicked();
+    void on_applyBumpMapButton_clicked();
     void on_lightColorButton_clicked();
     void on_objectAmbientColorButton_clicked();
     void on_objectDiffuseColorButton_clicked();

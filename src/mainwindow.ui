@@ -55,6 +55,19 @@
           </property>
          </widget>
         </item>
+        <item>
+         <widget class="QPushButton" name="applyBumpMapButton">
+          <property name="focusPolicy">
+           <enum>Qt::NoFocus</enum>
+          </property>
+          <property name="toolTip">
+           <string>Apply a bump map from a PNG/JPG file to selected object</string>
+          </property>
+          <property name="text">
+           <string>Apply Bump Map</string>
+          </property>
+         </widget>
+        </item>
        </layout>
       </item>
      </layout>
