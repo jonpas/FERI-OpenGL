@@ -38,7 +38,7 @@ void MainWindow::resetOpenGLContext() {
 }
 
 void MainWindow::on_loadObjectButton_clicked() {
-    QStringList paths = QFileDialog::getOpenFileNames(this, "Select Object(s)", "Object (*.obj)");
+    QStringList paths = QFileDialog::getOpenFileNames(this, "Select Object(s)", "", "Object (*.obj)");
     resetOpenGLContext();
 
     if (!paths.empty()) {
@@ -47,7 +47,7 @@ void MainWindow::on_loadObjectButton_clicked() {
 }
 
 void MainWindow::on_applyTextureButton_clicked() {
-    QString path = QFileDialog::getOpenFileName(this, "Select Texture", "Texture (*.png *.jpg *.jpeg)");
+    QString path = QFileDialog::getOpenFileName(this, "Select Texture", "", "Texture (*.png *.jpg *.jpeg)");
     resetOpenGLContext();
 
     if (path != "") {
@@ -56,7 +56,7 @@ void MainWindow::on_applyTextureButton_clicked() {
 }
 
 void MainWindow::on_applyBumpMapButton_clicked() {
-    QString path = QFileDialog::getOpenFileName(this, "Select Bump Map", "Bump Map (*.png *.jpg *.jpeg)");
+    QString path = QFileDialog::getOpenFileName(this, "Select Bump Map", "", "Bump Map (*.png *.jpg *.jpeg)");
     resetOpenGLContext();
 
     if (path != "") {

@@ -223,9 +223,9 @@ void WidgetOpenGLDraw::initializeGL() {
     objects.push_back(makeCube("Cube"));
     objects.back().translation.y += 2.0f;
     objects.back().translation.z += 5.0f;
-    QImage img2(512, 512, QImage::Format_RGB32);
-    img2.fill(Qt::red);
-    objects.back().textureImage = img2;
+    QImage cubeTex(512, 512, QImage::Format_RGB32);
+    cubeTex.fill(Qt::red);
+    objects.back().textureImage = cubeTex;
     applyBumpMapFromFile("../test/bumpMaps/dots.jpg", &objects.back(), true);
 
     QStringList paths = {"../test/models/icoSphere.obj"};
