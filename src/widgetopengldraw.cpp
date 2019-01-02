@@ -507,7 +507,7 @@ void WidgetOpenGLDraw::loadModelsFromFile(QStringList &paths, bool preload) {
 
     if (!preload) {
         // Select last added object
-        objectSelection->setCurrentIndex(static_cast<int>(objects.size() - 1));
+        objectSelection->setCurrentIndex(static_cast<int>(objects.size()));
     }
 
     update(); // Redraw scene
