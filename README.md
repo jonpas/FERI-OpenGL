@@ -14,9 +14,9 @@ OpenGL introduction application at Computer Graphics (slo. Računalniška Grafik
   - Per-Model Buffers
 - Texture Mapping
   - Simple UV
-  - Planar
-  - Cylindrical
-  - Spherical
+  - Planar (TODO)
+  - Cylindrical (TODO)
+  - Spherical (TODO)
 - Blinn-Phong Shading/Reflection Model
   - Single Point Light
 - Bump Mapping (TODO)
